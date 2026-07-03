@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The **AI Agent Console** shows how AI assistance can support High Tech operating decisions without becoming a black box. The page positions specialist agents as visible operating tools rather than generic chat responses.
+The **AI Agent Console** turns the release-train findings into a visible operating action without becoming a black box. The page positions specialist agents as observable tools that can connect product demand, capacity, supplier, quality, and customer evidence rather than returning a generic chat response.
 
 **Oracle AI Database** keeps the source data, SQL execution, PL/SQL tools, graph and spatial context, in-database analytics, and durable action logging connected to the same governed High Tech data foundation. The app orchestrates the agent workflow, Ollama provides local reasoning when available, and Oracle AI Database 26ai executes governed data operations and records action evidence.
 
@@ -42,7 +42,7 @@ Perform the following set of steps to show how the agent summarizes product capa
 
     ![AI Agent Console product capacity response highlighted](images/agent-capacity-response.png)
 
-**Expected result:** The response should summarize constrained products or capacity signals using Oracle-backed product and supply evidence. It should connect the answer to product availability, supply sites, shortage alerts, customer commitments, and next operating steps when those records are present in the live dataset.
+**Expected result:** The response summarizes constrained products or capacity signals using Oracle-backed product and supply evidence. It should connect the answer to product availability, supply sites, supported shortage alerts, customer commitments, and the next operating step.
 
 If the runtime shows a timeout or fallback, use it as an observability example: the operator can see whether the answer came from a complete LLM/tool path or from Oracle SQL and PL/SQL fallback evidence.
 
@@ -61,11 +61,11 @@ Perform the following set of steps to show that AI-assisted actions do not disap
 
 The governance point is that agent decisions should remain observable after the conversation, with action history available for supply review, product operations, customer follow-up, quality escalation, warranty response, service operations, and continuous improvement.
 
-The business value is that teams can make the decision from connected, governed data. **Oracle AI Database** provides the shared foundation that keeps operational data, analytics, graph evidence, SQL tools, PL/SQL actions, and AI workflows aligned.
+This closes the story: Seer Tech detected launch pressure, explained the signals, traced lifecycle dependencies, identified supply options, inspected customer promises, predicted the next constraint, interrogated the evidence, and recorded an auditable agent-assisted response.
 
 *You can move to the next scene.*
 
 ## Credits & Build Notes
 - **Author** - Oracle LiveLabs Team
-- **Last Updated By/Date** - Oracle LiveLabs Team, 2026-06-16
+- **Last Updated By/Date** - Oracle LiveLabs Team, 2026-07-02
 - **Source Bundle** - `livestack-hightech.zip`

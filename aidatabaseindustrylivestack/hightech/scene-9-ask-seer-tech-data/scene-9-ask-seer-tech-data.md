@@ -2,7 +2,7 @@
 
 ## Introduction
 
-**Ask Seer Tech Data** helps users ask operational questions in plain language while keeping the answer path visible. Users can compare narrated answers, conversational responses, generated SQL, and returned rows across product portfolios, component supply, fab capacity, customer commitments, quality and warranty, service operations, connected-product telemetry, and agent audit data.
+**Ask Seer Tech Data** lets the launch team interrogate the same constraint story in plain language while keeping the answer path visible. Users can compare narrated answers, conversational responses, generated SQL, and returned rows across product portfolios, component supply, fab capacity, customer commitments, quality and warranty, service operations, connected-product telemetry, and agent audit data.
 
 Natural-language data access can create governance risk if the language model generates invalid SQL, references the wrong objects, hides the query path, or exposes more data than the user should see. Oracle AI Database keeps query execution grounded in the live High Tech schema while the UI shows the selected mode and generated SQL path.
 
@@ -36,10 +36,7 @@ Perform the following set of steps when the user wants a business-readable answe
 
 1. Click **Clear** if a previous result is visible.
 2. Click **Explain**.
-3. Ask a High Tech question such as:
-- *Which products are constrained by component shortages and supplier risk?*
-- *Which commitments need capacity review before the promise date?*
-- *Which products show field quality or warranty exposure?*
+3. Ask **Which products are constrained by component shortages and supplier risk?**
 4. Review the narrated answer and generated SQL details when they are visible.
 
     ![Ask Seer Tech Data Explain mode response highlighted](images/ask-seer-tech-data-explain-mode.png)
@@ -57,7 +54,7 @@ Perform the following set of steps when the user is exploring the data interacti
 
 1. Click **Clear** if the Explain result is still visible.
 2. Click **Chat**.
-3. Ask a related question, such as **Which high-tech products have low capacity?** or **Which customer commitments are at risk from shortage signals?**
+3. Ask **Which customer commitments are at risk from shortage signals?**
 
     ![Ask Seer Tech Data Chat mode response highlighted](images/ask-seer-tech-data-chat-mode.png)
 
@@ -69,7 +66,7 @@ Perform the following set of steps when a data steward, planner, engineer, or re
 
 1. Click **Clear** if the Chat result is still visible.
 2. Click **Show SQL**.
-3. Ask a question such as **Which products have the highest demand volatility this week?**, **Which supply sites have shortage alerts?**, or **Which commitments are waiting on BOM or capacity review?**
+3. Ask **Which products have the highest demand volatility this week?**
 4. Review the generated SQL.
 
     ![Ask Seer Tech Data generated SQL highlighted](images/ask-seer-tech-data-generated-sql.png)
@@ -82,7 +79,7 @@ Perform the following set of steps to inspect the live rows behind the answer. T
 
 1. Click **Clear** if the generated SQL result is still visible.
 2. Click **Run SQL**.
-3. Ask a question such as **Which high-tech products have low capacity?** or rerun the previous question.
+3. Ask **Which products have the highest demand volatility this week?** This carries the reviewed question from **Show SQL** into governed execution.
 4. Review the returned table.
 5. Expand **View generated SQL** if you want to show the query behind the result.
 
@@ -96,7 +93,7 @@ Use the completed mode examples to explain the governance pattern behind the pag
 4. Oracle AI Database executes authorized SQL against the live schema.
 5. The UI returns visible SQL, rows, or a narrated answer depending on the selected mode.
 
-The business value is that product, manufacturing, supply, quality, service, and customer operations teams can move from a plain-English question to a governed operating decision without losing visibility into the query path.
+The business value is that product, manufacturing, supply, quality, service, and customer operations teams can interrogate the release-train evidence from different perspectives without losing visibility into the governed query path.
 
 This pattern matters because teams want faster answers, but they also need governed access, visible query logic, and a trusted execution layer.
 
@@ -104,5 +101,5 @@ This pattern matters because teams want faster answers, but they also need gover
 
 ## Credits & Build Notes
 - **Author** - Oracle LiveLabs Team
-- **Last Updated By/Date** - Oracle LiveLabs Team, 2026-06-16
+- **Last Updated By/Date** - Oracle LiveLabs Team, 2026-07-02
 - **Source Bundle** - `livestack-hightech.zip`
