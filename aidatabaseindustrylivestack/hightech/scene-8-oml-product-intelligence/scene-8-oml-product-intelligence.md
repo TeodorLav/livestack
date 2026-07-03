@@ -12,7 +12,7 @@ Estimated Time: **12 minutes**
 
 ### Objectives
 
-In this scene, you will learn how Virality, Demand Uplift, Predicted Orders, value opportunity, and confidence are interpreted; how forecasts lead product details; and how related predictive views support customer, signal, and capacity decisions.
+In this scene, you will learn how **Virality**, **Demand Uplift**,**Predicted Orders**, value opportunity, and confidence are interpreted; how forecasts lead product details; and how related predictive views support customer, signal, and capacity decisions.
 
 ## Task 1: Confirm prediction readiness
 

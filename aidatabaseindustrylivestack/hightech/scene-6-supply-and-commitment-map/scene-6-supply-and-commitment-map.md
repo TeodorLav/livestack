@@ -59,7 +59,7 @@ Compare the site table with the evidence in Capacity Alerts:
 
 A component is an **Immediate shortage** only when current stock is zero or forecast demand exceeds stock. A product with stock and zero current need must not be presented as a shortage. If such an item is retained for forecast monitoring, it belongs on the watchlist and must state the reason, such as forecast volatility or future demand exposure.
 
-The decision from this scene is to identify which customer promises depend on the constrained path. Continue to Customer Commitments.
+The decision from this scene is to identify which customer promises depend on the constrained path. Continue to **Customer Commitments**.
 
 *You can move to the next scene.*
 

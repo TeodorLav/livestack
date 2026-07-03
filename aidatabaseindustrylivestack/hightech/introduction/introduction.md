@@ -10,7 +10,7 @@ Visible examples include **AI Accelerator Module**, **AI Edge Gateway Reference 
 
 The runbook is a story-led walkthrough, not a feature checklist. Each scene shows how relational transactions, JSON Relational Duality, property graph, Oracle Spatial, vector search, Oracle Machine Learning, natural-language SQL, PL/SQL tools, and auditable AI agent actions work against the same governed High Tech foundation.
 
-In the demo, Seer Tech uses Oracle AI Database to connect product portfolios, semiconductor manufacturing records, fab operations capacity, wafer-start and yield signals, bill of materials dependencies, engineering change orders, supplier risk, contract manufacturing capacity, channel inventory, customer commitments, connected-product telemetry, field quality cases, warranty analytics, service and support operations, spatial allocation data, predictive analytics, conversational data access, and agent-assisted operations.
+In the demo, Seer Tech uses **Oracle AI Database** to connect product portfolios, manufacturing capacity, wafer-start and yield signals, bill of materials dependencies, engineering change orders, supplier risk, customer commitments, quality records, warranty exposure, service operations, and AI agent actions.
 
 Estimated Workshop Time: **90 minutes**
 
@@ -20,7 +20,7 @@ Each scene is designed to take between **5 and 10 minutes**.
 
 ### Objectives
 
-In this LiveStack demo, you will learn how Oracle AI Database supports product-launch resilience, component availability, manufacturing and fab coordination, product lifecycle governance, customer commitment management, quality and warranty intelligence, predictive analytics, governed data questions, and AI-assisted operating action across a High Tech product organization.
+In this **LiveStack** demo, you will learn how **Oracle AI Database** supports product-launch resilience across component availability, manufacturing coordination, product lifecycle governance, customer commitment management, quality and warranty intelligence, predictive analytics, governed data questions, and AI-assisted operating action.
 
 ### Prerequisites
 
