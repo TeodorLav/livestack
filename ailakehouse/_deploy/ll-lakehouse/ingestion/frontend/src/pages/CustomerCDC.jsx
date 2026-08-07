@@ -232,9 +232,18 @@ export default function CustomerCDC() {
             title={goldengate?.uiUrl ? 'Open GoldenGate Studio in a new tab' : 'GoldenGate Studio is not available'}
           />
           <div className="streaming-osa-credentials" aria-label="GoldenGate Studio login credentials">
+            <strong className="streaming-osa-credentials__title">Login information</strong>
             <div>
               <span>Username</span>
-              <strong>{goldengate?.credentials?.username || 'Not configured'}</strong>
+              <div className="credential-copy-row">
+                <strong>{goldengate?.credentials?.username || 'Not configured'}</strong>
+                <CopySecretButton
+                  value={goldengate?.credentials?.username || ''}
+                  label="GoldenGate Studio username"
+                  disabled={!goldengate?.credentials?.username}
+                  unavailableTitle="GoldenGate Studio username is not available to copy"
+                />
+              </div>
             </div>
             <div>
               <span>Password</span>

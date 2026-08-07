@@ -1064,6 +1064,17 @@ textarea {
   background: rgba(76, 130, 92, 0.08);
 }
 
+.streaming-osa-credentials__title {
+  grid-column: 1 / -1;
+  display: block;
+  margin-bottom: -0.08rem;
+  color: var(--color-text-dim);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .streaming-osa-credentials span,
 .streaming-osa-credentials strong {
   display: block;

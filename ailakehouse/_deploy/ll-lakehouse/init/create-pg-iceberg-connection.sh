@@ -675,7 +675,14 @@ username = str((payload.get("connectionProperties") or {}).get("username") or ""
 if username.casefold() != expected_username.casefold():
     sys.exit(1)
 
-for schema in payload.get("schemas") or []:
+schemas = payload.get("schemas")
+# Some Data Transforms versions omit schema metadata from an otherwise
+# successfully tested Oracle data server. In that response shape, the
+# connection username is the only available schema signal.
+if not schemas:
+    sys.exit(0)
+
+for schema in schemas:
     if not schema.get("default"):
         continue
     schema_names = (

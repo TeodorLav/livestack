@@ -291,6 +291,15 @@ JSON
 verify_adb_connection_detail "${TEST_ROOT}/verified-detail.json" "PG" \
   || fail "PG username/default-schema verification failed."
 
+cat > "${TEST_ROOT}/schema-less-detail.json" <<'JSON'
+{
+  "connectionProperties": {"username": "PG"},
+  "schemas": []
+}
+JSON
+verify_adb_connection_detail "${TEST_ROOT}/schema-less-detail.json" "PG" \
+  || fail "A successful PG connection without schema metadata must be accepted."
+
 cat > "${TEST_ROOT}/wrong-schema-detail.json" <<'JSON'
 {
   "connectionProperties": {"username": "PG"},

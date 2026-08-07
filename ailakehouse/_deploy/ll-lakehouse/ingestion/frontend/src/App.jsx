@@ -327,6 +327,14 @@ function withAdminDbActionsUrl(connection) {
   };
 }
 
+function withSchemaDbActionsUrl(connection) {
+  if (!connection?.schemaDbActionsUrl) return connection;
+  return {
+    ...connection,
+    dbActionsUrl: connection.schemaDbActionsUrl,
+  };
+}
+
 function buildDbActionsSdwUrl(connection, { searchParams = [], hash = '' } = {}) {
   if (!connection?.dbActionsUrl) return null;
 
@@ -580,32 +588,36 @@ export default function App() {
     () => buildDataTransformUrl(activeLakehouseConnection),
     [activeLakehouseConnection],
   );
-  const omlUrl = useMemo(
-    () => buildOmlUrl(activeLakehouseConnection),
-    [activeLakehouseConnection],
-  );
   const adminLakehouseConnection = useMemo(
     () => withAdminDbActionsUrl(activeLakehouseConnection),
+    [activeLakehouseConnection],
+  );
+  const omlUrl = useMemo(
+    () => buildOmlUrl(adminLakehouseConnection),
+    [adminLakehouseConnection],
+  );
+  const schemaLakehouseConnection = useMemo(
+    () => withSchemaDbActionsUrl(activeLakehouseConnection),
     [activeLakehouseConnection],
   );
   const lakehouseActionUrls = useMemo(() => ({
     'adb-data-load': dataLoadingUrl,
     'adb-data-transform': dataTransformUrl,
     'adb-oml': omlUrl,
-    'adb-sql-developer-web': buildDbActionsSdwUrl(adminLakehouseConnection, {
+    'adb-sql-developer-web': buildDbActionsSdwUrl(schemaLakehouseConnection, {
       searchParams: [['nav', 'worksheet']],
     }),
-    'adb-actions-launchpad': buildDbActionsSdwUrl(adminLakehouseConnection),
-    'adb-graph-studio': buildDbActionsSdwUrl(adminLakehouseConnection, { hash: '#' }),
-    'adb-spatial-studio': buildDbActionsSdwUrl(adminLakehouseConnection, { hash: '#' }),
-    'adb-json': buildDbActionsSdwUrl(adminLakehouseConnection, {
+    'adb-actions-launchpad': buildDbActionsSdwUrl(schemaLakehouseConnection),
+    'adb-graph-studio': buildDbActionsSdwUrl(schemaLakehouseConnection, { hash: '#' }),
+    'adb-spatial-studio': buildDbActionsSdwUrl(schemaLakehouseConnection, { hash: '#' }),
+    'adb-json': buildDbActionsSdwUrl(schemaLakehouseConnection, {
       searchParams: [
         ['nav', 'application'],
         ['application', 'soda'],
       ],
     }),
-    'adb-data-studio-overview': buildDataLoadingUrl(adminLakehouseConnection),
-  }), [adminLakehouseConnection, dataLoadingUrl, dataTransformUrl, omlUrl]);
+    'adb-data-studio-overview': dataLoadingUrl,
+  }), [dataLoadingUrl, dataTransformUrl, omlUrl, schemaLakehouseConnection]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;

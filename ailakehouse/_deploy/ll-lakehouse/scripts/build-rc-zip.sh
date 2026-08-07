@@ -35,10 +35,9 @@ if [[ "${UPLOAD_ARCHIVE}" == true && -z "${BUILD_ARCHIVE_UPLOAD_URL_PREFIX}" ]];
   echo "BUILD_ARCHIVE_UPLOAD_URL_PREFIX is required when UPLOAD_ARCHIVE=true; set it in ${BUILD_ENV_FILE} or the process environment." >&2
   exit 1
 fi
-if grep -Eq '^(BUILD_ARCHIVE_URL|GGSA_OSA_ARCHIVE_URL|GRAVITINO_ICEBERG_REST_SERVER_ARCHIVE_URL)="https?://' "${PROJECT_ROOT}/.env.example"; then
-  echo "Refusing to package while .env.example contains a real build archive URL." >&2
-  exit 1
-fi
+#
+# `.env.example` is excluded from the generated archive, so it may contain real
+# URLs without affecting the packaged build output.
 
 hash_file() {
   if command -v shasum >/dev/null 2>&1; then

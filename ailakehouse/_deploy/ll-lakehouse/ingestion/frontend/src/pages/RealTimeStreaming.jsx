@@ -179,9 +179,18 @@ export default function RealTimeStreaming() {
             title={osaStatus?.uiUrl ? 'Open OSA in a new tab' : 'OSA is not available'}
           />
           <div className="streaming-osa-credentials" aria-label="OSA login credentials">
+            <strong className="streaming-osa-credentials__title">Login information</strong>
             <div>
               <span>Username</span>
-              <strong>{osaStatus?.credentials?.username || 'Not configured'}</strong>
+              <div className="credential-copy-row">
+                <strong>{osaStatus?.credentials?.username || 'Not configured'}</strong>
+                <CopySecretButton
+                  value={osaStatus?.credentials?.username || ''}
+                  label="OSA username"
+                  disabled={!osaStatus?.credentials?.username}
+                  unavailableTitle="OSA username is not available to copy"
+                />
+              </div>
             </div>
             <div>
               <span>Password</span>

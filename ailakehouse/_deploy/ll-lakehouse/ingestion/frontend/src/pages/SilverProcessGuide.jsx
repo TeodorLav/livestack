@@ -223,9 +223,18 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
             />
           </div>
           <div className="streaming-osa-credentials" aria-label="Data Transforms login credentials">
+            <strong className="streaming-osa-credentials__title">Login information</strong>
             <div>
               <span>Username</span>
-              <strong>{PG_USERNAME}</strong>
+              <div className="credential-copy-row">
+                <strong>{PG_USERNAME}</strong>
+                <CopySecretButton
+                  value={PG_USERNAME}
+                  label="PG username"
+                  disabled={!PG_USERNAME}
+                  unavailableTitle="PG username is not available to copy"
+                />
+              </div>
             </div>
             <div>
               <span>Password</span>
