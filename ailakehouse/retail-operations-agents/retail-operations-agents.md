@@ -91,11 +91,8 @@ For the business, this means PeakGear can respond to demand shifts faster, coord
 
 You have completed the PeakGear AI Lakehouse LiveStack Demo runbook.
 
-## Credits & Build Notes
-- **Author** - Oracle LiveLabs Team
-- **Last Updated By/Date** - Oracle LiveLabs Team, 2026-06-13
 
 ## Acknowledgements
 
-* **Author** - TODO: Your Name, Your Title, Your Organization
-* **Last Updated By/Date** - TODO: Your Name, Month Year
+* **Author** - LiveLabs Team August 2026
+* **Last Updated By/Date** - LiveLabs Team August 2026

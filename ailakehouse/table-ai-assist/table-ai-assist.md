@@ -101,5 +101,5 @@ You can move to the next scene.
 
 ## Acknowledgements
 
-* **Author** - LiveLabs Team, July 2026
-* **Last Updated By/Date** - LiveLabs Team, July 2026
+* **Author** - LiveLabs Team August 2026
+* **Last Updated By/Date** - LiveLabs Team August 2026
