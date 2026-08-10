@@ -79,6 +79,22 @@ export const IMPORTANCE_CONTENT = {
     ],
     value: 'PeakGear reduces duplicate transformation effort and speeds up delivery of governed use cases across the AI Lakehouse.',
   },
+  icebergCatalogServer: {
+    titleId: 'iceberg-catalog-server-importance-title',
+    title: 'Why an Iceberg catalog server matters',
+    closeLabel: 'Close Iceberg catalog server explanation',
+    beneficiary: 'Data engineers, analytics teams, and AI application builders using shared Iceberg data',
+    builder: 'Platform engineers configuring Data Transforms and governed lakehouse storage',
+    lead: 'The business outcome is a governed, reusable catalog for Iceberg tables so data products can be discovered and processed consistently instead of being configured separately in each tool.',
+    example: 'PeakGear can register its Iceberg REST catalog once, then use Data Transforms to discover and build curated data products on the same OCI object storage tables.',
+    steps: [
+      { title: 'Table discovery becomes shared', body: 'A catalog gives Data Transforms one consistent view of Iceberg namespaces and tables instead of requiring manual storage-path setup for every flow.' },
+      { title: 'Storage credentials stay reusable', body: 'The configured OCI access values let the Data Transforms catalog connection reach the same object storage used by the lakehouse.' },
+      { title: 'Interoperability improves', body: 'Iceberg tables can be consumed by compatible processing engines while the catalog preserves the metadata contract that describes them.' },
+      { title: 'New pipelines start faster', body: 'Once the catalog server is registered, builders can focus on transformation logic rather than rebuilding connectivity for each pipeline.' },
+    ],
+    value: 'PeakGear makes Iceberg data products easier to discover, govern, and reuse across Data Transforms and compatible lakehouse workloads.',
+  },
   productCatalog: {
     titleId: 'catalog-importance-title',
     title: 'Why the Product Catalog matters',

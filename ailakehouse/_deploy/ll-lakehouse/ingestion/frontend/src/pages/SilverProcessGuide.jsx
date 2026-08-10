@@ -7,25 +7,33 @@ import ImportanceModal, { ImportanceButton } from '../components/ImportanceModal
 import { JetButton } from '../components/JetControls';
 import { IMPORTANCE_CONTENT } from '../content/importanceContent';
 
-const PG_USERNAME = 'PG';
-const GUIDE_MARKDOWN_URL = 'https://raw.githubusercontent.com/oracle-livelabs/livestack/refs/heads/main/ailakehouse/process-bronze-to-silver/process-bronze-to-silver.md';
-const GUIDE_IMAGE_DIRECTORY_URL = 'https://raw.githubusercontent.com/oracle-livelabs/livestack/refs/heads/main/ailakehouse/process-bronze-to-silver/images/';
-const GUIDE_SOURCE_URL = 'https://github.com/oracle-livelabs/livestack/blob/main/ailakehouse/process-bronze-to-silver/process-bronze-to-silver.md';
-const GUIDE_SOURCE_DIRECTORY_URL = 'https://github.com/oracle-livelabs/livestack/blob/main/ailakehouse/process-bronze-to-silver/';
 const GUIDE_FETCH_TIMEOUT_MS = 15000;
 const REMARK_PLUGINS = [remarkGfm];
+const PG_USERNAME = 'PG';
 
-function transformGuideUrl(url, key) {
+const DEFAULT_GUIDE = {
+  title: 'Transform Bronze into Silver with Data Transforms',
+  description: 'Use this guided flow to demonstrate how raw PeakGear Bronze data becomes typed, standardized, deduplicated Silver tables that are ready for Gold views and app use cases.',
+  importance: 'silverProcess',
+  markdownUrl: 'https://raw.githubusercontent.com/oracle-livelabs/livestack/refs/heads/main/ailakehouse/process-bronze-to-silver/process-bronze-to-silver.md',
+  imageDirectoryUrl: 'https://raw.githubusercontent.com/oracle-livelabs/livestack/refs/heads/main/ailakehouse/process-bronze-to-silver/images/',
+  sourceUrl: 'https://github.com/oracle-livelabs/livestack/blob/main/ailakehouse/process-bronze-to-silver/process-bronze-to-silver.md',
+  sourceDirectoryUrl: 'https://github.com/oracle-livelabs/livestack/blob/main/ailakehouse/process-bronze-to-silver/',
+  loadingDescription: 'Retrieving the latest Bronze-to-Silver instructions and images.',
+  guideLabel: 'LiveLabs Bronze to Silver guide',
+};
+
+function transformGuideUrl(url, key, guide) {
   const value = String(url || '').trim();
   if (!value) return '';
   if (value.startsWith('#')) return key === 'href' ? value : '';
 
   try {
-    const baseUrl = key === 'src' ? GUIDE_MARKDOWN_URL : GUIDE_SOURCE_DIRECTORY_URL;
+    const baseUrl = key === 'src' ? guide.markdownUrl : guide.sourceDirectoryUrl;
     const resolvedUrl = new URL(value, baseUrl);
 
     if (key === 'src') {
-      return resolvedUrl.protocol === 'https:' && resolvedUrl.href.startsWith(GUIDE_IMAGE_DIRECTORY_URL)
+      return resolvedUrl.protocol === 'https:' && resolvedUrl.href.startsWith(guide.imageDirectoryUrl)
         ? resolvedUrl.href
         : '';
     }
@@ -75,7 +83,14 @@ function GuideImage({ src, alt = '', title, onSelect }) {
   );
 }
 
-export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConnection, pgPassword }) {
+export default function SilverProcessGuide({
+  dataTransformsUrl,
+  hasLakehouseConnection,
+  pgPassword,
+  guide: guideOverrides,
+  extraCredentials = [],
+}) {
+  const guide = { ...DEFAULT_GUIDE, ...guideOverrides };
   const [showImportance, setShowImportance] = useState(false);
   const [guideState, setGuideState] = useState({ status: 'loading', markdown: '', error: '' });
   const [reloadToken, setReloadToken] = useState(0);
@@ -98,7 +113,7 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
 
     async function loadGuide() {
       try {
-        const response = await fetch(GUIDE_MARKDOWN_URL, {
+        const response = await fetch(guide.markdownUrl, {
           cache: 'no-cache',
           headers: { Accept: 'text/plain' },
           signal: controller.signal,
@@ -136,7 +151,7 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [reloadToken]);
+  }, [guide.markdownUrl, reloadToken]);
 
   useEffect(() => {
     if (!selectedImage) return undefined;
@@ -198,16 +213,57 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
     ),
   };
 
+  const credentialsPanel = (
+    <div className="streaming-osa-credentials" aria-label="Data Transforms login credentials">
+      <strong className="streaming-osa-credentials__title">Login information</strong>
+      <div>
+        <span>Username</span>
+        <div className="credential-copy-row">
+          <strong>{PG_USERNAME}</strong>
+          <CopySecretButton
+            value={PG_USERNAME}
+            label="PG username"
+            disabled={!PG_USERNAME}
+            unavailableTitle="PG username is not available to copy"
+          />
+        </div>
+      </div>
+      <div>
+        <span>Password</span>
+        <div className="credential-copy-row">
+          <strong>{seededPgPassword}</strong>
+          <CopySecretButton
+            value={pgPassword}
+            label="PG password"
+            disabled={!canCopySeededPgPassword}
+            unavailableTitle="Connect to ADB first to copy the seeded PG password"
+          />
+        </div>
+      </div>
+      {extraCredentials.map(({ label, value, unavailableTitle }) => (
+        <div key={label}>
+          <span>{label}</span>
+          <div className="credential-copy-row">
+            <strong>{value || 'Unavailable'}</strong>
+            <CopySecretButton
+              value={value}
+              label={label}
+              disabled={!value}
+              unavailableTitle={unavailableTitle || `${label} is not available to copy`}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="bronze-guide-page fade-in">
-      <section className="bronze-guide-hero">
+      <section className={`bronze-guide-hero ${guide.fullWidthCredentials ? 'bronze-guide-hero--full-width-credentials' : ''}`}>
         <div className="bronze-guide-hero__copy">
           <p className="section-kicker">Process</p>
-          <h2>Transform Bronze into Silver with Data Transforms</h2>
-          <p>
-            Use this guided flow to demonstrate how raw PeakGear Bronze data becomes typed,
-            standardized, deduplicated Silver tables that are ready for Gold views and app use cases.
-          </p>
+          <h2>{guide.title}</h2>
+          <p>{guide.description}</p>
         </div>
         <div className="bronze-guide-actions">
           <div className="bronze-guide-action-row">
@@ -222,45 +278,20 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
               title={hasLakehouseConnection ? 'Open Data Transforms in a new tab' : 'Connect to ADB first'}
             />
           </div>
-          <div className="streaming-osa-credentials" aria-label="Data Transforms login credentials">
-            <strong className="streaming-osa-credentials__title">Login information</strong>
-            <div>
-              <span>Username</span>
-              <div className="credential-copy-row">
-                <strong>{PG_USERNAME}</strong>
-                <CopySecretButton
-                  value={PG_USERNAME}
-                  label="PG username"
-                  disabled={!PG_USERNAME}
-                  unavailableTitle="PG username is not available to copy"
-                />
-              </div>
-            </div>
-            <div>
-              <span>Password</span>
-              <div className="credential-copy-row">
-                <strong>{seededPgPassword}</strong>
-                <CopySecretButton
-                  value={pgPassword}
-                  label="PG password"
-                  disabled={!canCopySeededPgPassword}
-                  unavailableTitle="Connect to ADB first to copy the seeded PG password"
-                />
-              </div>
-            </div>
-          </div>
+          {!guide.fullWidthCredentials && credentialsPanel}
         </div>
+        {guide.fullWidthCredentials && credentialsPanel}
       </section>
 
       <ImportanceModal
         open={showImportance}
         onClose={() => setShowImportance(false)}
-        content={IMPORTANCE_CONTENT.silverProcess}
+        content={IMPORTANCE_CONTENT[guide.importance]}
       />
 
       <section
         className="silver-guide-live"
-        aria-label="LiveLabs Bronze to Silver guide"
+        aria-label={guide.guideLabel}
         aria-busy={guideState.status === 'loading'}
       >
         {guideState.status === 'loading' && (
@@ -268,7 +299,7 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
             <span className="silver-guide-live__spinner" aria-hidden="true" />
             <div>
               <strong>Loading the LiveLabs guide</strong>
-              <p>Retrieving the latest Bronze-to-Silver instructions and images.</p>
+              <p>{guide.loadingDescription}</p>
             </div>
           </div>
         )}
@@ -284,7 +315,7 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
                 <RefreshCw size={16} aria-hidden="true" />
                 Retry
               </button>
-              <a href={GUIDE_SOURCE_URL} target="_blank" rel="noopener noreferrer">
+              <a href={guide.sourceUrl} target="_blank" rel="noopener noreferrer">
                 Open guide source
                 <ExternalLink size={15} aria-hidden="true" />
               </a>
@@ -298,7 +329,7 @@ export default function SilverProcessGuide({ dataTransformsUrl, hasLakehouseConn
               remarkPlugins={REMARK_PLUGINS}
               components={markdownComponents}
               skipHtml
-              urlTransform={transformGuideUrl}
+              urlTransform={(url, key) => transformGuideUrl(url, key, guide)}
             >
               {guideState.markdown}
             </ReactMarkdown>

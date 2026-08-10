@@ -1941,6 +1941,10 @@ textarea {
   justify-items: stretch;
 }
 
+.bronze-guide-hero--full-width-credentials > .streaming-osa-credentials {
+  grid-column: 1 / -1;
+}
+
 .bronze-guide-action-row {
   display: flex;
   flex-wrap: wrap;
