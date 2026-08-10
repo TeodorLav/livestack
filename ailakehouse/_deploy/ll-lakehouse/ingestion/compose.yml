@@ -171,7 +171,7 @@ services:
 
   goldengate-cdc:
     hostname: goldengate-cdc
-    image: ${GOLDENGATE_STUDIO_FREE_IMAGE:-container-registry.oracle.com/goldengate/goldengate-studio-free:latest}
+    image: ${GOLDENGATE_STUDIO_FREE_IMAGE:-container-registry.oracle.com/goldengate/goldengate-studio-free:23.9.0.25.09}
     environment:
       STUDIO_ADMIN: ${GOLDENGATE_STUDIO_ADMIN_USER:-studioadmin}
       STUDIO_ADMIN_PWD: ${DBPASSWORD:-peakgear}

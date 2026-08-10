@@ -126,7 +126,7 @@ fi
   echo "OGGF_API_SERVER_SSL_URL=https://${PUBLIC_IP}:8501"
   echo "ADB_STUDIO_WALLET_ZIP=/wallet/goldengate-studio-wallet.zip"
   echo "ADB_WALLET_PASSWORD=${ADB_WALLET_PASSWORD:-}"
-  echo "GOLDENGATE_STUDIO_FREE_IMAGE=container-registry.oracle.com/goldengate/goldengate-studio-free:latest"
+  echo "GOLDENGATE_STUDIO_FREE_IMAGE=container-registry.oracle.com/goldengate/goldengate-studio-free:23.9.0.25.09"
   echo "GOLDENGATE_ORACLE_FREE_IMAGE=container-registry.oracle.com/goldengate/goldengate-oracle-free:latest"
   echo "CUSTOMER_CDC_AUTO_SETUP=true"
   echo "CUSTOMER_CDC_DEMO_APPLY=false"
