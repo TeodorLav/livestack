@@ -1,4 +1,4 @@
-# Scene 16 Retail Operations Agents
+# Scene 17 Retail Operations Agents
 
 ## Introduction
 
