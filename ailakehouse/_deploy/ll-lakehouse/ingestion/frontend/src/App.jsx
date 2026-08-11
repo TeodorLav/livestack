@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Map,
   Network,
+  ServerCog,
   ShoppingCart,
 } from 'lucide-react';
 import { api } from './utils/api';
@@ -117,7 +118,7 @@ const ICEBERG_CATALOG_SERVER_NAV_ITEM = {
   id: ICEBERG_CATALOG_SERVER_PAGE_ID,
   pageId: ICEBERG_CATALOG_SERVER_PAGE_ID,
   label: 'Add Iceberg Catalog Server',
-  iconClass: 'oj-fwk-icon oj-fwk-icon-server',
+  Icon: ServerCog,
 };
 
 const ROUTED_NAV_ITEMS = [
