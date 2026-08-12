@@ -30,6 +30,8 @@ Perform the following set of steps to open the **Add Iceberg Catalog Server** de
 2. Select **Add Iceberg Catalog Server**.
 3. Confirm that the page title is **Add Iceberg Catalog Server**.
 
+![1](images/1.png)
+
 The page explains the purpose of the catalog server and shows the values required for the connection. Keep this tab open while you configure Data Transforms.
 
 ## Task 2: Review and copy the connection values
@@ -42,6 +44,8 @@ Note that all required information are displated in the **Login Information** pa
 2. The **REST URL**. This is the URL of the LiveStack Iceberg REST catalog.
 3. The **OCI Access ID** and **OCI Secret Key**. Use them only when Data Transforms prompts for OCI Object Storage credentials.
 
+![2](images/2.png)
+
 
 ## Task 3: Open and sign in to Data Transforms
 
@@ -52,6 +56,8 @@ Perform the following set of steps to open **Data Transforms**:
 3. Click **Connect**.
 4. Keep the LiveStack tab open so that you can return to it when you need to copy a connection value.
 
+![3](images/3.png)
+
 ## Task 4: Create an Apache Iceberg connection
 
 Perform the following set of steps to create the catalog-server connection:
@@ -60,6 +66,8 @@ Perform the following set of steps to create the catalog-server connection:
 2. Click **Create Connection**.
 3. Select **Apache Iceberg** as the technology.
 4. Provide the following values:
+
+![4](images/4.png)
 
 | Data Transforms setting              | Value                                                |
 | --------------------------------------| ------------------------------------------------------|
@@ -73,6 +81,8 @@ Perform the following set of steps to create the catalog-server connection:
 | OCI Secret Key (in Storage Settings) | Paste the **OCI Secret Key** from the LiveStack page |
 
 
+![5](images/5.png)
+
 
 ## Task 5: Test and save the connection
 
@@ -83,17 +93,26 @@ Perform the following set of steps to test the catalog-server connection:
 3. Click **Save** or **Create**.
 4. Return to the Connections or Data Servers list and confirm that `My_Iceberg_Catalog` appears as an Apache Iceberg connection.
 
+
+![6](images/6.png)
+
 ## Task 6: Verify catalog server content
 
 Perform the following set of steps to verify that Data Transforms can discover the catalog:
 
 1. In a new browser enter the following URL: **REST URL** from the LiveStack page + `iceberg/v1/namespaces` to display available namespaces on the catalog server
 
+![7](images/7.png)
+
+
 2. Explore the content of the namespace by appending `/bronze/tables` to the URL. This will display the current tables available in the namespace
 
+![8](images/8.png)
 
 3. Append the table name to the URL, so the complete URL is:  **REST URL** from the LiveStack page + `iceberg/v1/namespaces/bronze/tables/product_master_raw`. This will display all metadata of our Iceberg table
 
+
+![9](images/9.png)
 
 
 
