@@ -499,7 +499,60 @@ assert load["bulkLoadName"] == "dataLoad"
 assert load["parentProjectName"] == "peakgear"
 assert load["targetModel"]["schema"]["schemaName"] == "pg-iceberg.gold"
 assert load["sourceTables"] == [{"sourceTableName": "GOLD_PRODUCTS", "targetPreloadAction": "APPEND"}]
+assert "dataLoadOptions" not in load
 PY
+
+RESET_CALLS_FILE="${WORK_DIR}/reset-calls.log"
+api_request() {
+  local method="$1"
+  local path="$2"
+  local data_file="$3"
+  local output_file="$4"
+
+  API_STATUS=200
+  printf '%s %s\n' "${method}" "${path}" >> "${RESET_CALLS_FILE}"
+  case "${method} ${path}" in
+    "GET /mock-api/bulkload")
+      printf '%s\n' '[{"bulkLoadName":"dataLoad","parentProjectName":"peakgear","globalId":"load-id"}]' > "${output_file}"
+      ;;
+    "GET /mock-api/mappings")
+      printf '%s\n' '[{"name":"dataFlow","projectName":"peakgear","globalId":"flow-id"}]' > "${output_file}"
+      ;;
+    "GET /mock-api/projects/name/peakgear")
+      printf '%s\n' '{"name":"peakgear","globalId":"project-id"}' > "${output_file}"
+      ;;
+    "GET /mock-api/models")
+      printf '%s\n' '[{"modelCode":"PG","globalId":"model-id"}]' > "${output_file}"
+      ;;
+    "GET /mock-api/dataservers/id/oracle-default")
+      printf '%s\n' '{"name":"adb","globalId":"oracle-default","schemas":[{"dataSchema":"PG","globalId":"pg-schema-id"}]}' > "${output_file}"
+      ;;
+    DELETE\ *)
+      printf '%s\n' '{}' > "${output_file}"
+      ;;
+    *)
+      fail "Unexpected reset mocked API request: ${method} ${path}"
+      ;;
+  esac
+}
+
+reset_demo_data_transforms "/mock-api" || fail "Data Transforms demo reset failed."
+expected_reset_calls="${WORK_DIR}/expected-reset-calls.log"
+cat > "${expected_reset_calls}" <<'EOF'
+GET /mock-api/bulkload
+DELETE /mock-api/bulkload/id/load-id
+GET /mock-api/mappings
+DELETE /mock-api/mappings/id/flow-id
+GET /mock-api/projects/name/peakgear
+DELETE /mock-api/projects/id/project-id
+GET /mock-api/models
+DELETE /mock-api/models/id/model-id
+GET /mock-api/dataservers/id/oracle-default
+DELETE /mock-api/dataservers/schemas/id/pg-schema-id?cascade=true&forceDelete=true
+DELETE /mock-api/dataservers/id/iceberg-default?cascade=true&forceDelete=true
+EOF
+cmp -s "${expected_reset_calls}" "${RESET_CALLS_FILE}" \
+  || fail "Data Transforms demo reset did not use the expected scoped deletion order."
 
 is_disabled false || fail "false must disable provisioning."
 is_disabled 0 || fail "0 must disable provisioning."
