@@ -2774,11 +2774,23 @@ textarea {
 }
 
 .product-catalog-hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1.25rem;
   align-items: end;
   padding: 1.5rem;
+}
+
+.product-catalog-hero > .streaming-importance-button {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1;
+}
+
+.product-catalog-hero > div:first-child {
+  padding-right: 13rem;
 }
 
 .product-catalog-hero h2 {
