@@ -591,7 +591,7 @@ export default function AgentConsole() {
 
 SELECT DBMS_CLOUD_AI_AGENT.RUN_TEAM(
   team_name   => 'SOCIAL_TREND_TEAM',
-  user_prompt => :question
+  user_prompt => 'Which products are trending and need attention?'
 ) AS response
 FROM dual;` : `-- Agent runtime: app orchestration + Ollama + Oracle AI Database 26ai
 -- The app resolves intent -> routes to a specialist team -> executes SQL / PL/SQL in Oracle
@@ -603,11 +603,12 @@ FROM dual;` : `-- Agent runtime: app orchestration + Ollama + Oracle AI Database
 -- 3. Join inventory and fulfillment data in Oracle
 -- 4. Return recommendations and write actions to audit tables
 
--- Agent decisions written back atomically:
-INSERT INTO agent_actions (agent_name, action_type, entity_type,
-  entity_id, decision_payload, confidence, execution_status)
-VALUES ('trend_detection_agent','reorder_flag','product',
-  :product_id, :json_payload, 0.92, 'proposed');`} />
+-- Review the most recent decisions written by the agent runtime:
+SELECT action_id, agent_name, action_type, entity_type,
+       entity_id, confidence, execution_status, created_at
+FROM agent_actions
+ORDER BY created_at DESC
+FETCH FIRST 10 ROWS ONLY;`} />
           {/* Team / Agent / Tools grid */}
           <div>
             <p className="text-[10px] font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">Agent Teams &amp; Tools</p>

@@ -277,9 +277,9 @@ export default function AskData() {
             <FeatureBadge label="Live Oracle Schema" color="blue" />
           </div>
           <SqlBlock code={isRuntimeLoading ? `-- Ask Data runtime discovery
--- The app is checking whether the Oracle Select AI profile is available.
--- If OCI GenAI is connected, only Oracle Select AI is offered on this page.
--- If OCI GenAI is unavailable, the local Ollama fallback is shown instead.` : isSelectAiRuntime ? `-- Ask Data runtime: question -> DBMS_CLOUD_AI -> OCI GenAI -> Oracle SQL -> UI answer
+-- The runtime check is still in progress. This seeded query is executable in the meantime.
+SELECT COUNT(*) AS seeded_products
+FROM products;` : isSelectAiRuntime ? `-- Ask Data runtime: question -> DBMS_CLOUD_AI -> OCI GenAI -> Oracle SQL -> UI answer
 -- Active profile: ${profile}
 -- Model: ${activeModelLabel}
 
