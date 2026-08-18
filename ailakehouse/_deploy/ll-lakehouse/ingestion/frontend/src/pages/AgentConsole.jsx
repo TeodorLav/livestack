@@ -225,9 +225,6 @@ function ChatAgent({ onActionLogged, runtime }) {
           </div>
           <div>
             <h3 className="text-sm font-bold">Chat with AI Agents</h3>
-            <p className="text-[10px] text-[var(--color-text-dim)]">
-              Ask questions — auto-routed to <span className="font-semibold text-[var(--color-text)]">Signal</span>, <span className="font-semibold text-[var(--color-text)]">Store Service</span>, or <span className="font-semibold text-[var(--color-text)]">Orders & Fulfillment Flow</span> agents
-            </p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -250,10 +247,10 @@ function ChatAgent({ onActionLogged, runtime }) {
           <div className="space-y-3 py-4">
             <div className="text-center mb-4">
               <JetGlyph iconClass="oj-fwk-icon-users" className="agent-console-empty-glyph tone-teal" />
-              <p className="text-sm text-[var(--color-text-dim)]">Ask me anything about your PeakGear sporting goods data</p>
+              <p className="text-sm text-[var(--color-text-dim)]">Ask me about your PeakGear sporting goods data</p>
               <p className="text-[10px] text-[var(--color-text-dim)] mt-1">
                 Powered by <span className="font-semibold text-[var(--color-text)]">
-                  {nativeAgentActive ? 'Oracle Select AI Agent' : 'Ollama (llama3.2)'}
+                  {nativeAgentActive ? 'Oracle Select AI Agent Framework' : 'Ollama (llama3.2)'}
                 </span> for reasoning + Oracle SQL and PL/SQL tools
               </p>
             </div>
@@ -682,7 +679,7 @@ FETCH FIRST 10 ROWS ONLY;`} />
           <p className="text-sm text-[var(--color-text-dim)] mt-1">
             {nativeAgentActive ? (
               <>
-                Agent teams use <span className="font-semibold text-[var(--color-text)]">Oracle Select AI Agent</span> with OCI GenAI against the app database
+                Agent teams use <span className="font-semibold text-[var(--color-text)]">Oracle Select AI Agent Framework</span> with OCI GenAI against the app database
               </>
             ) : (
               <>
