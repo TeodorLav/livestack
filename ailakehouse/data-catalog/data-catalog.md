@@ -1,4 +1,4 @@
-# Scene 2 Data Catalog and AI Table Explain
+# Data Catalog and AI Table Explain
 
 ## Introduction
 

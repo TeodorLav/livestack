@@ -1,4 +1,4 @@
-# Scene 6 Transform Iceberg Data
+# Transform Iceberg Data
 
 ## Introduction
 

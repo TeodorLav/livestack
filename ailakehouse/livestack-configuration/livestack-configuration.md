@@ -1,4 +1,4 @@
-# Scene 1 Confirm LiveStack Readiness
+# Confirm LiveStack Readiness
 
 ## Introduction
 

@@ -38,12 +38,12 @@ The environment provisions the project, connections, schemas, and data load for 
 1. From the Data Transforms home page, open **Projects**.
 2. Open the project named `peakgear`.
    
-  && 
+  ![2026-08-19-004716](images/2026-08-19-004716.png) 
 
 3. In the project resources, open **Data Loads**.
 4. Open the data load named `dataLoad`.
 
-  &&
+  ![2026-08-19-004717](images/2026-08-19-004717.png)
 
 If the project or data load is not visible yet, wait briefly and refresh the page. First-boot provisioning creates these objects after the Data Transforms service and Iceberg catalog are ready.
 
@@ -72,7 +72,7 @@ Confirm the following in the data load editor:
 3. The target model uses the Apache Iceberg connection and the `GOLD` namespace.
 4. The target preload action is **Append**.
 
-&&
+![2026-08-19-004718](images/2026-08-19-004718.png)
 
 
 ## Task 4: Validate and run the data load
@@ -82,10 +82,16 @@ Perform the following steps to execute the preconfigured load:
 1. Click **Save** if Data Transforms shows unsaved changes.
 2. Validate the data load and confirm that no validation errors are reported.
 3. Click **Start** to run `dataLoad`.
-4. Open **Jobs** in the project resources.
+
+![2026-08-19-004719](images/2026-08-19-004719.png) 
+
+4. Open the displayud **Job**.
+
+![2026-08-19-004720](images/2026-08-19-004720.png)
+
 5. Monitor the job until its status is **Successful** or **Completed**.
 
-&&
+![2026-08-19-004721](images/2026-08-19-004721.png)
 
 The first run creates or appends the `GOLD_PRODUCTS` data in the Iceberg `GOLD` namespace. Because the target action is append, avoid starting the load repeatedly in the same environment unless you intentionally want to add another copy of the source rows.
 
@@ -97,7 +103,7 @@ We can do that using the Iceberg catalog server REST API.
 
 1. On the View Login information screen, copy the IP address (without the port):
    
-   &&
+   ![2026-08-19-004722](images/2026-08-19-004722.png)
 
 2. Create the REST API URL:
 
@@ -111,6 +117,7 @@ We can do that using the Iceberg catalog server REST API.
 3. Open the URL in a browser and review the results:
 
 
+![2026-08-19-004723](images/2026-08-19-004723.png)
 
 
 You can review the table definition and Iceberg table metadata

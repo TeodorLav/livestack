@@ -1,4 +1,4 @@
-# Scene 15 PeakGear Webshop and Product Discovery
+# PeakGear Webshop and Product Discovery
 
 ## Introduction
 

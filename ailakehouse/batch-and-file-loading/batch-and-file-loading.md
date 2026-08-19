@@ -1,4 +1,4 @@
-# Scene 5 Batch and File Loading Ingest
+# Batch and File Loading Ingest
 
 ## Introduction
 

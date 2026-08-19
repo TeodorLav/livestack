@@ -1,4 +1,4 @@
-# Scene 16 Ask Your Data
+# Ask Your Data
 
 ## Introduction
 

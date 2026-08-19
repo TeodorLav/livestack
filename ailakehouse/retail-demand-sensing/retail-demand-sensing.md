@@ -1,4 +1,4 @@
-# Scene 10 Retail Demand Sensing
+# Retail Demand Sensing
 
 ## Introduction
 

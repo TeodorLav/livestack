@@ -1,4 +1,4 @@
-# Scene 12 Store Fulfillment Map
+# Store Fulfillment Map
 
 ## Introduction
 

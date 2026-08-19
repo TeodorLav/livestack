@@ -1,4 +1,4 @@
-# Scene 7 Add an Apache Iceberg Catalog Server
+# Add an Apache Iceberg Catalog Server
 
 ## Introduction
 

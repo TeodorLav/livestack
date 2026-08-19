@@ -1,4 +1,4 @@
-# Scene 4 Change Data Capture Ingest
+# Change Data Capture Ingest
 
 ## Introduction
 

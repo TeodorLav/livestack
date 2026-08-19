@@ -1,4 +1,4 @@
-# Scene 3 Real-Time Streaming Ingest
+# Real-Time Streaming Ingest
 
 ## Introduction
 

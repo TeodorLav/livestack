@@ -1,4 +1,4 @@
-# Scene 8 Operations Dashboard
+# Operations Dashboard
 
 ## Introduction
 
