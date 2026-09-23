@@ -8,6 +8,8 @@ The data moves through a medallion process. **Bronze** preserves source-shaped d
 
 The suggested flow is designed for a quick pass highlighting some business outcomes that can only be achieved using curated data products. It also provides a demo that demonstrates how real time data can be easily ingested in to Autonomous AI Lakehouse.
 
+[](video:https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/peakgear/10-min.mp4:medium)
+
 Estimated Time: **10 to 15 minutes**
 
 ### Objectives

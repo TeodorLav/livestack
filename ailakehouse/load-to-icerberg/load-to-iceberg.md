@@ -10,6 +10,8 @@ The prepared flow uses **Iceberg incremental load** in **Oracle Data Transforms*
 
 Other tools that support Iceberg can then use the same product data.
 
+[](video:https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/peakgear/load-to-iceberg.mp4:medium)
+
 Estimated Time: **10 minutes**
 
 >**Note**: You must have finished the scene Transform Iceberg Data!
