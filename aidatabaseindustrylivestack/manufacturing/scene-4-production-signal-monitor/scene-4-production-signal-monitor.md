@@ -10,7 +10,10 @@ Oracle AI Database helps address these challenges by keeping vector search close
 
 Estimated Time: **10 minutes**
 
-![Production Signal Monitor page with semantic search controls and signal feed](images/scene-4-production-signal-monitor.png)
+<video controls width="100%">
+  <source src="https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/Manufacturing/Seer%20Manufacturg_Scene-3_with-CC.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ### Objectives
 
