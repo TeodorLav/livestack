@@ -14,8 +14,6 @@ Demand signals are not loaded in this scene. They are covered by the Real-Time S
 
 **Oracle Database Actions Data Studio** provides the **Data Load** workflow. It reads the product master CSV from **OCI Object Storage** and writes it to Bronze.
 
-[](video:https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/peakgear/batch.mp4:medium)
-
 Estimated Time: **10 minutes**
 
 ### Objectives

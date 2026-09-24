@@ -6,8 +6,6 @@
 
 This path gives a high-level view of that flow in 30 minutes. It starts with customer and operations outcomes, then shows how the lakehouse receives live demand events and processes Iceberg-backed data.
 
-[](video:https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/peakgear/30-min.mp4:medium)
-
 Estimated Time: **30 minutes**
 
 ### Objectives

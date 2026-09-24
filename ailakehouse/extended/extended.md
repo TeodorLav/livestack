@@ -6,7 +6,6 @@
 
 This 60-minute path starts with customer and operational outcomes, then follows the ingest, catalog, and transformation scenes that support them. It covers PeakGears' customer shopping portal, operational monitoring, return-risk analysis, data questions, retail operations agents, real-time and change-data-capture ingest, catalog explanations, and Iceberg data movement.
 
-[](video:https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/peakgear/60-min.mp4:medium)
 
 Estimated Time: **60 minutes**
 

@@ -17,8 +17,6 @@ At PeakGear, this value shows up in practical business questions:
 - Which returns need review?
 - Can a shopper find a suitable product and resolve an order issue?
 
-[](video:https://c4u04.objectstorage.us-ashburn-1.oci.customer-oci.com/p/EcTjWk2IuZPZeNnD_fYMcgUhdNDIDA6rt9gaFj_WZMiL7VvxPBNMY60837hu5hga/n/c4u04/b/livelabsfiles/o/livestack/Videos/peakgear/intro.mp4:medium)
-
 Each question connects to the same end-to-end lakehouse flow. **Ingest** brings in source data. **Process** refines it through the **Bronze**, **Silver**, and **Gold** medallion layers. **Serve Data** and **Serve AI** turn the resulting data products into business experiences.
 
 The Process scenes also show how **Apache Iceberg** tables can be cataloged, transformed, and shared with other catalog servers.
