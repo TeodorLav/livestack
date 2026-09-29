@@ -88,6 +88,16 @@ reject_text() {
   fi
 }
 
+reject_crlf() {
+  local entry="$1"
+  local content
+  content="$(unzip -p "${ZIP_PATH}" "${entry}")"
+  if [[ "${content}" == *$'\r'* ]]; then
+    echo "Windows CRLF line endings found in runtime text file: ${entry}" >&2
+    exit 1
+  fi
+}
+
 echo "Testing compressed archive data..."
 unzip -tq "${ZIP_PATH}"
 
@@ -99,6 +109,7 @@ require_entry "ingestion/frontend/src/content/importanceContent.js"
 require_entry "ingestion/frontend/src/styles/index.css"
 require_entry "ingestion/frontend/src/pages/BronzeDataLoadGuide.jsx"
 require_entry "ingestion/backend/routes/awsGlue.js"
+require_entry "ingestion/ggsa/Dockerfile"
 require_entry "ingestion/gravitino/Dockerfile"
 require_entry "ingestion/gravitino/entrypoint.sh"
 require_entry "ingestion/iceberg-seeder/Dockerfile"
@@ -111,8 +122,15 @@ for source in products store_inventory store_locations store_sales_transactions;
   require_entry "ingestion/demodata/aicat-sources/${source}.csv"
 done
 require_entry "init/create-pg-iceberg-connection.sh"
+require_entry "init/create-medallion-project.sh"
+require_entry "init/provision-medallion.py"
+require_entry "init/pg-medallion-project.service"
+require_entry "init/data-transforms/peakgear-medallion.json"
+require_entry "tests/test-medallion-project.py"
+require_text "init/create-pg-iceberg-connection.sh" "medallion-reset-guard.json"
 require_entry "init/create-iceberg-adb-external-table.sh"
 require_entry "init/configure-ai-data-catalog.sh"
+require_entry "init/configure-ai-catalog-access.py"
 require_entry "init/adb-wallet.sh"
 require_entry "ingestion/db/data/bootstrap_context.sql"
 require_entry "tests/test-bootstrap-vpd.cjs"
@@ -130,6 +148,10 @@ require_entry "tests/test-aws-glue-catalog.sh"
 require_entry "tests/test-data-transforms-connection-provisioning.sh"
 require_entry "tests/test-wallet-hardening.sh"
 require_entry "tests/test-osa-streaming-restart-safety.sh"
+
+while IFS= read -r runtime_text_entry; do
+  [[ -z "${runtime_text_entry}" ]] || reject_crlf "${runtime_text_entry}"
+done < <(grep -E '(^|/)(Dockerfile|[^/]+\.(sh|service|py|ya?ml))$' <<< "${ZIP_ENTRIES}")
 
 echo "Checking excluded runtime/build artifacts..."
 forbidden_entries="$(
@@ -260,6 +282,14 @@ require_text "ingestion/iceberg-seeder/seed_product_master.py" "request_checksum
 require_text "ingestion/iceberg-seeder/seed_product_master.py" "publish_adb_metadata"
 require_text "ingestion/iceberg-seeder/seed_product_master.py" "oci://"
 require_text "ingestion/iceberg-seeder/seed_product_master.py" "table.append"
+require_text "ingestion/ggsa/Dockerfile" "FROM docker.io/apache/kafka@sha256:"
+require_text "ingestion/ggsa/Dockerfile" "FROM docker.io/apache/spark@sha256:"
+require_text "ingestion/ggsa/Dockerfile" "COPY --from=kafka-runtime /opt/kafka /u01/kafka"
+require_text "ingestion/ggsa/Dockerfile" "COPY --from=spark-runtime /opt/spark /u01/spark"
+require_text "ingestion/ggsa/Dockerfile" "install -d -m 0755 /u01/spark/conf"
+require_text "ingestion/ggsa/container/entrypoint.sh" '"${SPARK_HOME}/conf"'
+reject_text "ingestion/ggsa/Dockerfile" "downloads.apache.org/kafka"
+reject_text "ingestion/ggsa/Dockerfile" "archive.apache.org/dist/spark"
 require_text "ingestion/demodata/bronze/product_master_raw.csv" "Databricks,BRZ-PROD-20260520-01"
 reject_text "ingestion/demodata/bronze/product_master_raw.csv" "NETSUITE,BRZ-PROD-20260520-01"
 require_text "ingestion/compose.yml" 'curl -fsS -u \"$${OGG_ADMIN}:$${OGG_ADMIN_PWD}\"'
@@ -328,6 +358,7 @@ if [[ "${RUN_BUILD}" -eq 1 ]]; then
   bash "${tmp_dir}/tests/test-public-endpoint-urls.sh"
   bash "${tmp_dir}/tests/test-aws-glue-catalog.sh"
   bash "${tmp_dir}/tests/test-data-transforms-connection-provisioning.sh"
+  PYTHONDONTWRITEBYTECODE=1 python3 "${tmp_dir}/tests/test-medallion-project.py"
   bash "${tmp_dir}/tests/test-wallet-hardening.sh"
   bash "${tmp_dir}/tests/test-osa-streaming-restart-safety.sh"
   echo "Building frontend from clean extracted archive..."
