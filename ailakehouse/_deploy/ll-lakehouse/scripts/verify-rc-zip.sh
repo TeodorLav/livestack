@@ -88,6 +88,16 @@ reject_text() {
   fi
 }
 
+reject_crlf() {
+  local entry="$1"
+  local content
+  content="$(unzip -p "${ZIP_PATH}" "${entry}")"
+  if [[ "${content}" == *$'\r'* ]]; then
+    echo "Windows CRLF line endings found in runtime text file: ${entry}" >&2
+    exit 1
+  fi
+}
+
 echo "Testing compressed archive data..."
 unzip -tq "${ZIP_PATH}"
 
@@ -99,6 +109,7 @@ require_entry "ingestion/frontend/src/content/importanceContent.js"
 require_entry "ingestion/frontend/src/styles/index.css"
 require_entry "ingestion/frontend/src/pages/BronzeDataLoadGuide.jsx"
 require_entry "ingestion/backend/routes/awsGlue.js"
+require_entry "ingestion/ggsa/Dockerfile"
 require_entry "ingestion/gravitino/Dockerfile"
 require_entry "ingestion/gravitino/entrypoint.sh"
 require_entry "ingestion/iceberg-seeder/Dockerfile"
@@ -137,6 +148,10 @@ require_entry "tests/test-aws-glue-catalog.sh"
 require_entry "tests/test-data-transforms-connection-provisioning.sh"
 require_entry "tests/test-wallet-hardening.sh"
 require_entry "tests/test-osa-streaming-restart-safety.sh"
+
+while IFS= read -r runtime_text_entry; do
+  [[ -z "${runtime_text_entry}" ]] || reject_crlf "${runtime_text_entry}"
+done < <(grep -E '(^|/)(Dockerfile|[^/]+\.(sh|service|py|ya?ml))$' <<< "${ZIP_ENTRIES}")
 
 echo "Checking excluded runtime/build artifacts..."
 forbidden_entries="$(
@@ -267,6 +282,14 @@ require_text "ingestion/iceberg-seeder/seed_product_master.py" "request_checksum
 require_text "ingestion/iceberg-seeder/seed_product_master.py" "publish_adb_metadata"
 require_text "ingestion/iceberg-seeder/seed_product_master.py" "oci://"
 require_text "ingestion/iceberg-seeder/seed_product_master.py" "table.append"
+require_text "ingestion/ggsa/Dockerfile" "FROM docker.io/apache/kafka@sha256:"
+require_text "ingestion/ggsa/Dockerfile" "FROM docker.io/apache/spark@sha256:"
+require_text "ingestion/ggsa/Dockerfile" "COPY --from=kafka-runtime /opt/kafka /u01/kafka"
+require_text "ingestion/ggsa/Dockerfile" "COPY --from=spark-runtime /opt/spark /u01/spark"
+require_text "ingestion/ggsa/Dockerfile" "install -d -m 0755 /u01/spark/conf"
+require_text "ingestion/ggsa/container/entrypoint.sh" '"${SPARK_HOME}/conf"'
+reject_text "ingestion/ggsa/Dockerfile" "downloads.apache.org/kafka"
+reject_text "ingestion/ggsa/Dockerfile" "archive.apache.org/dist/spark"
 require_text "ingestion/demodata/bronze/product_master_raw.csv" "Databricks,BRZ-PROD-20260520-01"
 reject_text "ingestion/demodata/bronze/product_master_raw.csv" "NETSUITE,BRZ-PROD-20260520-01"
 require_text "ingestion/compose.yml" 'curl -fsS -u \"$${OGG_ADMIN}:$${OGG_ADMIN_PWD}\"'
