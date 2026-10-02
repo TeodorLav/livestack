@@ -9,6 +9,7 @@ import { FeatureBadge, SqlBlock, DiagramBox } from '../components/OracleInfoPane
 import { JetButton, JetSelectSingle } from '../components/JetControls';
 import { RegisterOraclePanel } from '../context/OraclePanelContext';
 import { useUser } from '../context/UserContext';
+import { TransportationStoryPanel } from '../components/TransportationStory';
 
 const CARRIER_COLORS = {
   FedEx: '#796087',
@@ -462,7 +463,7 @@ SELECT ROUND(SDO_GEOM.SDO_DISTANCE(
          fc.location,              -- SDO_GEOMETRY point
          c.location,               -- SDO_GEOMETRY point
          0.05, 'unit=MILE'), 1)    AS distance_miles
-FROM   fulfillment_centers fc, shippers_v c
+FROM   fulfillment_centers fc, shippers c
 WHERE  fc.center_id = ${order.FULFILLMENT_CENTER_ID || ':center_id'}
 AND    c.shipper_id = ${order.CUSTOMER_ID || ':cust_id'};
 -- Result: ${distanceMiles ? Math.round(distanceMiles).toLocaleString() + ' miles' : 'N/A'}
@@ -500,6 +501,7 @@ export default function Orders() {
 
   return (
     <div className="space-y-6 fade-in">
+      <TransportationStoryPanel scene="orders" />
 
       {/* Register Oracle Internals into the right panel */}
       <RegisterOraclePanel title="Shipment Orders & Exceptions">
@@ -583,10 +585,10 @@ FROM products p WITH UPDATE;`} />
               How to Query a Duality View
             </p>
             <SqlBlock code={`-- Relational: traditional row-by-row access
-SELECT o.order_id, c.shipper_name, o.order_total,
+SELECT o.order_id, c.full_name, o.order_total,
        oi.product_id, oi.quantity, oi.unit_price
 FROM   orders o
-JOIN   shippers_v c  ON c.shipper_id = o.customer_id
+JOIN   shippers c    ON c.shipper_id = o.shipper_id
 JOIN   order_items oi ON oi.order_id   = o.order_id
 WHERE  o.order_id = :id;
 

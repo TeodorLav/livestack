@@ -8,6 +8,7 @@ import { api } from '../utils/api';
 import { useData } from '../hooks/useData';
 import { formatNumber, formatCurrency } from '../utils/format';
 import { FeatureBadge, SqlBlock, DiagramBox } from '../components/OracleInfoPanel';
+import { SceneStoryPanel } from '../components/HealthcareStory';
 import { JetButton, JetProgressCircle, JetSelectSingle } from '../components/JetControls';
 import { RegisterOraclePanel } from '../context/OraclePanelContext';
 
@@ -146,75 +147,69 @@ function DemandOraclePanel() {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">
-          Care-Service Demand Signal Heuristic - Read-Only SQL
+          SERVICE_DEMAND_RISK_MODEL - Random Forest Classification
         </p>
         <p className="text-sm text-[var(--color-text)] leading-relaxed">
-          This card shows the application's fallback <span className="tone-sienna font-mono">read-only SQL</span>{' '}
-          when persisted mining models are not provisioned. It combines signal reach, momentum, and order demand
-          into a deterministic care-service risk score directly in Oracle - no external model or model export.
+          A <span className="tone-sienna font-mono">Random Forest</span> model (50 trees) trained via{' '}
+          <code className="text-xs tone-sienna">DBMS_DATA_MINING.CREATE_MODEL</code> on 12 signal intensity
+          and service-activity features. Oracle scores every care service <em>inline</em> at query time using{' '}
+          <code className="text-xs tone-sienna">PREDICTION()</code> and{' '}
+          <code className="text-xs tone-sienna">PREDICTION_PROBABILITY()</code> - no external ML pipeline,
+          no model export. The trained model lives in the database as a persistent mining model object.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <FeatureBadge label="Read-Only Oracle SQL" color="yellow" />
-        <FeatureBadge label="Signal + Order Aggregates" color="yellow" />
-        <FeatureBadge label="CASE Classification" color="orange" />
-        <FeatureBadge label="Weighted Risk Score" color="orange" />
-        <FeatureBadge label="No Model Required" color="green" />
-        <FeatureBadge label="Runtime Fallback" color="purple" />
+        <FeatureBadge label="DBMS_DATA_MINING" color="yellow" />
+        <FeatureBadge label="ALGO_RANDOM_FOREST (50 trees)" color="yellow" />
+        <FeatureBadge label="PREDICTION()" color="orange" />
+        <FeatureBadge label="PREDICTION_PROBABILITY()" color="orange" />
+        <FeatureBadge label="12 Training Features" color="green" />
+        <FeatureBadge label="In-DB Model Persistence" color="purple" />
       </div>
-      <SqlBlock code={`-- Read-only fallback query used when no persisted DBMS_DATA_MINING model is provisioned.
-WITH product_features AS (
-  SELECT p.product_id, p.product_name, p.category, p.unit_price,
-         NVL(eng.total_posts, 0) AS total_posts,
-         NVL(eng.avg_virality, 0) AS avg_virality,
-         NVL(eng.viral_posts, 0) AS viral_posts,
-         NVL(eng.rising_posts, 0) AS rising_posts,
-         NVL(eng.total_views, 0) AS total_views,
-         NVL(sales.units_sold, 0) AS units_sold
-  FROM products p
-  LEFT JOIN (
-    SELECT ppm.product_id, COUNT(*) AS total_posts,
-           AVG(sp.virality_score) AS avg_virality,
-           SUM(CASE WHEN sp.momentum_flag = 'viral' THEN 1 ELSE 0 END) AS viral_posts,
-           SUM(CASE WHEN sp.momentum_flag = 'rising' THEN 1 ELSE 0 END) AS rising_posts,
-           SUM(sp.views_count) AS total_views
-    FROM post_product_mentions ppm
-    JOIN social_posts sp ON sp.post_id = ppm.post_id
-    GROUP BY ppm.product_id
-  ) eng ON eng.product_id = p.product_id
-  LEFT JOIN (
-    SELECT product_id, SUM(quantity) AS units_sold
-    FROM order_items
-    GROUP BY product_id
-  ) sales ON sales.product_id = p.product_id
-  WHERE p.is_active = 1
-),
-scored_products AS (
-  SELECT pf.*, ROUND(LEAST(99,
-    pf.avg_virality * .45 + LEAST(pf.total_posts, 40) * .9 +
-    LEAST(pf.viral_posts, 10) * 6 + LEAST(pf.rising_posts, 15) * 2 +
-    LEAST(pf.total_views / 2000, 25) + LEAST(pf.units_sold, 80) * .2
-  ), 1) AS surge_probability
-  FROM product_features pf
-)
-SELECT product_name, category, unit_price, total_posts, units_sold,
-       CASE WHEN surge_probability >= 65 THEN 'SURGE'
-            WHEN surge_probability >= 45 THEN 'WATCH'
-            ELSE 'STABLE' END AS predicted_surge,
-       surge_probability
-FROM scored_products
-WHERE total_posts > 0 OR units_sold > 0
-ORDER BY surge_probability DESC
-FETCH FIRST 10 ROWS ONLY;`} />
+      <SqlBlock code={`-- Step 1: Train the model (one-time)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => 'DEMAND_SURGE_MODEL',
+    mining_function => DBMS_DATA_MINING.CLASSIFICATION,
+    data_table_name => 'OML_DEMAND_TRAINING_V',
+    case_id_column_name => 'PRODUCT_ID',
+    target_column_name  => 'SURGE_FLAG',
+    settings_table_name => 'DEMAND_SURGE_SETTINGS'
+    -- ALGO_RANDOM_FOREST, 50 trees, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score care services in real-time SQL
+SELECT p.product_name, p.category,
+
+  -- Random Forest prediction: SURGE or NORMAL
+  PREDICTION(DEMAND_SURGE_MODEL USING
+    p.category, p.unit_price,
+    eng.total_posts, eng.avg_sentiment,
+    eng.total_likes, eng.total_shares,
+    eng.total_views, eng.avg_criticality,
+    eng.critical_signals, eng.rising_posts,
+    sales.units_sold, sales.service_value
+  ) AS predicted_surge,
+
+  -- Probability of SURGE class (0.0 to 1.0)
+  ROUND(PREDICTION_PROBABILITY(
+    DEMAND_SURGE_MODEL, 'SURGE' USING ...
+  ) * 100, 1) AS surge_probability
+
+FROM products p
+JOIN product_engagement eng  ...
+JOIN product_sales sales     ...
+ORDER BY surge_probability DESC;`} />
       <div className="oml-model-flow">
-        <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">Oracle SQL Fallback Pipeline</div>
-        <DiagramBox label="Products + Signals + Orders" sub="care-service demand and signal evidence" color="#AA643B" />
-        <div className="text-center text-[10px] text-[var(--color-text)]">↓ aggregate</div>
-        <DiagramBox label="Weighted Signal Score" sub="reach, momentum, and order demand" color="#C74634" />
-        <div className="text-center text-[10px] text-[var(--color-text)]">↓ CASE classification</div>
-        <DiagramBox label="Read-Only Scoring in SQL" sub="no DBMS_DATA_MINING model required" color="#437C94" />
+        <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">DBMS_DATA_MINING Pipeline</div>
+        <DiagramBox label="OML_DEMAND_TRAINING_V (187 care services)" sub="12 features: signal intensity + service requests + supply" color="#AA643B" />
+        <div className="text-center text-[10px] text-[var(--color-text)]">↓ CREATE_MODEL</div>
+        <DiagramBox label="DEMAND_SURGE_MODEL (Random Forest)" sub="ALGO_RANDOM_FOREST · 50 trees · PREP_AUTO" color="#C74634" />
+        <div className="text-center text-[10px] text-[var(--color-text)]">↓ PREDICTION()</div>
+        <DiagramBox label="Real-Time Scoring in SQL" sub="PREDICTION_PROBABILITY('SURGE' USING *)" color="#437C94" />
         <div className="text-center text-[10px] text-[var(--color-text)]">↓ result</div>
-        <DiagramBox label="SURGE / WATCH / STABLE + score" sub="scored inline · no ETL · no model dependency" color="#4C825C" />
+        <DiagramBox label="SURGE / NORMAL + probability %" sub="scored inline · no ETL · model persists in DB" color="#4C825C" />
       </div>
     </div>
   );
@@ -225,66 +220,66 @@ function RFMOraclePanel() {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">
-          Care-Site Service Segmentation - SQL Quartiles
+          CUSTOMER_SEGMENT_MODEL - K-Means Clustering
         </p>
         <p className="text-sm text-[var(--color-text)] leading-relaxed">
-          This card uses <span className="tone-plum font-mono">NTILE(4)</span> window functions over recency,
-          frequency, and service value to segment care sites. It is a complete read-only Oracle SQL fallback and
-          does not require a persisted K-Means model.
+          A <span className="tone-plum font-mono">K-Means</span> model (4 clusters) trained via{' '}
+          <code className="text-xs tone-plum">DBMS_DATA_MINING.CREATE_MODEL</code> on 6 care-site service-pattern features.
+          Each care site is assigned to a cluster using{' '}
+          <code className="text-xs tone-plum">CLUSTER_ID()</code> with{' '}
+          <code className="text-xs tone-plum">CLUSTER_PROBABILITY()</code> confidence.
+          Care-site quartile labels are layered on top via NTILE(4) window functions for service-pattern segmentation.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <FeatureBadge label="Read-Only Oracle SQL" color="violet" />
-        <FeatureBadge label="RFM Aggregation" color="violet" />
-        <FeatureBadge label="NTILE(4)" color="cyan" />
-        <FeatureBadge label="Deterministic Buckets" color="cyan" />
+        <FeatureBadge label="DBMS_DATA_MINING" color="violet" />
+        <FeatureBadge label="ALGO_KMEANS (4 clusters)" color="violet" />
+        <FeatureBadge label="CLUSTER_ID()" color="cyan" />
+        <FeatureBadge label="CLUSTER_PROBABILITY()" color="cyan" />
         <FeatureBadge label="NTILE(4) Care-Site Labels" color="purple" />
         <FeatureBadge label="Follow-up Risk Scoring" color="red" />
       </div>
-      <SqlBlock code={`-- Read-only fallback query. Segments are derived from RFM quartiles; no mining model is required.
-WITH customer_metrics AS (
-  SELECT c.customer_id, c.first_name || ' ' || c.last_name AS full_name,
-         c.city, c.state_province AS state,
-         NVL(rfm.recency_days, 999) AS recency_days,
-         NVL(rfm.frequency, 0) AS frequency,
-         NVL(rfm.monetary, 0) AS monetary,
-         NVL(rfm.avg_order_value, 0) AS avg_order_value,
-         NVL(rfm.total_items, 0) AS total_items
-  FROM customers c
-  LEFT JOIN (
-    SELECT o.customer_id,
-           ROUND(SYSDATE - CAST(MAX(o.created_at) AS DATE)) AS recency_days,
-           COUNT(DISTINCT o.order_id) AS frequency,
-           SUM(o.order_total) AS monetary,
-           AVG(o.order_total) AS avg_order_value,
-           SUM(oi.quantity) AS total_items
-    FROM orders o
-    LEFT JOIN order_items oi ON oi.order_id = o.order_id
-    GROUP BY o.customer_id
-  ) rfm ON rfm.customer_id = c.customer_id
-),
-scored AS (
-  SELECT cm.*, NTILE(4) OVER (ORDER BY recency_days ASC) AS recency_quartile,
-         NTILE(4) OVER (ORDER BY frequency DESC) AS frequency_quartile,
-         NTILE(4) OVER (ORDER BY monetary DESC) AS monetary_quartile
-  FROM customer_metrics cm
-  WHERE frequency > 0
-)
-SELECT full_name, city, state, frequency AS order_count, monetary AS total_spent,
-       avg_order_value, recency_days AS days_since_last_order,
-       MOD(recency_quartile + frequency_quartile + monetary_quartile - 1, 4) + 1 AS segment_bucket,
-       ROUND((recency_quartile + frequency_quartile + monetary_quartile) / 12, 3) AS segment_score,
-       recency_quartile, frequency_quartile, monetary_quartile
-FROM scored
-ORDER BY total_spent DESC
-FETCH FIRST 50 ROWS ONLY;`} />
+      <SqlBlock code={`-- Step 1: Train K-Means model (one-time)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => 'CUSTOMER_SEGMENT_MODEL',
+    mining_function => DBMS_DATA_MINING.CLUSTERING,
+    data_table_name => 'OML_CUSTOMER_RFM_V', -- compatibility view for care-site service patterns
+    case_id_column_name => 'CUSTOMER_ID',
+    settings_table_name => 'CUST_SEGMENT_SETTINGS'
+    -- ALGO_KMEANS, 4 clusters, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score care sites with CLUSTER_ID()
+SELECT c.first_name || ' ' || c.last_name AS full_name,
+
+  -- K-Means cluster assignment
+  CLUSTER_ID(CUSTOMER_SEGMENT_MODEL USING
+    cm.lifetime_value, cm.recency_days,
+    cm.frequency, cm.monetary,
+    cm.avg_order_value, cm.total_items
+  ) AS oml_cluster_id,
+
+  -- Cluster membership probability
+  ROUND(CLUSTER_PROBABILITY(
+    CUSTOMER_SEGMENT_MODEL USING ...
+  ), 3) AS cluster_probability,
+
+  -- Care-site service-pattern quartile labels layered on top
+  NTILE(4) OVER (ORDER BY recency ASC)     AS service_recency_quartile,
+  NTILE(4) OVER (ORDER BY frequency DESC) AS service_frequency_quartile,
+  NTILE(4) OVER (ORDER BY monetary DESC)  AS service_value_quartile
+
+FROM customer_metrics cm
+ORDER BY service_value_total DESC;`} />
       <div className="oml-model-flow">
-        <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">RFM SQL Segmentation</div>
-        <DiagramBox label="Care-Site Service Activity" sub="recency, frequency, monetary, request value" color="#C74634" />
-        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ NTILE(4)</div>
-        <DiagramBox label="RFM Quartiles" sub="four deterministic service-pattern bands" color="#796087" />
-        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ combine scores</div>
-        <DiagramBox label="Segment Bucket + Score" sub="complete read-only SQL fallback" color="#437C94" />
+        <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">DBMS_DATA_MINING K-Means Pipeline</div>
+        <DiagramBox label="Care-site service-pattern view (OML_CUSTOMER_RFM_V)" sub="6 features: service value, recency, frequency, average request value, items" color="#C74634" />
+        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CREATE_MODEL</div>
+        <DiagramBox label="CUSTOMER_SEGMENT_MODEL (K-Means)" sub="ALGO_KMEANS · 4 clusters · PREP_AUTO" color="#796087" />
+        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CLUSTER_ID()</div>
+        <DiagramBox label="Cluster Assignment + Probability" sub="each care site -> nearest centroid" color="#437C94" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ NTILE(4)</div>
         <DiagramBox label="Care-Site Segment Labels + Follow-up Risk" sub="Champion · Loyal · At Risk · Lost · …" color="#4C825C" />
       </div>
@@ -297,54 +292,69 @@ function ForecastOraclePanel() {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">
-          Service Value Trend - OLS Read-Only SQL
+          SERVICE_VALUE_PREDICT_MODEL - GLM Regression + OLS Trend
         </p>
         <p className="text-sm text-[var(--color-text)] leading-relaxed">
           Two complementary Oracle ML techniques:{' '}
-          The application fallback uses{' '}
+          <code className="text-xs tone-pine">REVENUE_PREDICT_MODEL</code> compatibility model (Generalized Linear Model)
+          trained via <code className="text-xs tone-pine">DBMS_DATA_MINING</code> predicts per-request service value
+          from care-site and service features. The time-series trend uses{' '}
           <code className="text-xs tone-pine">REGR_SLOPE / REGR_R2</code> (ISO SQL:2003) for OLS regression
-          over governed service value, with a seven-day moving average. It does not require a GLM model.
+          with forward projection and widening confidence intervals.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <FeatureBadge label="Read-Only Oracle SQL" color="green" />
-        <FeatureBadge label="OLS Regression" color="green" />
-        <FeatureBadge label="REGR_SLOPE" color="yellow" />
+        <FeatureBadge label="DBMS_DATA_MINING" color="green" />
+        <FeatureBadge label="ALGO_GLM (Regression)" color="green" />
+        <FeatureBadge label="PREDICTION()" color="yellow" />
         <FeatureBadge label="REGR_SLOPE / REGR_R2" color="cyan" />
         <FeatureBadge label="7-Day Moving Average" color="cyan" />
         <FeatureBadge label="Confidence Intervals" color="purple" />
       </div>
-      <SqlBlock code={`-- Read-only fallback query. The app uses an OLS revenue trend when a GLM model is unavailable.
-WITH daily_revenue AS (
-  SELECT TRUNC(CAST(created_at AS DATE)) AS day,
-         SUM(order_total) AS revenue,
-         COUNT(order_id) AS order_count,
-         ROW_NUMBER() OVER (ORDER BY TRUNC(CAST(created_at AS DATE))) AS rn
-  FROM orders
-  WHERE CAST(created_at AS DATE) >= SYSDATE - 30
-  GROUP BY TRUNC(CAST(created_at AS DATE))
-),
+      <SqlBlock code={`-- Step 1: Train GLM model (one-time)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => 'REVENUE_PREDICT_MODEL', -- compatibility name for service-value prediction
+    mining_function => DBMS_DATA_MINING.REGRESSION,
+    data_table_name => 'OML_REVENUE_TRAINING_V', -- compatibility view for service-value training
+    case_id_column_name => 'ORDER_ID',
+    target_column_name  => 'TARGET_REVENUE', -- compatibility target: service value
+    settings_table_name => 'REVENUE_PREDICT_SETTINGS'
+    -- ALGO_GENERALIZED_LINEAR_MODEL, PREP_AUTO_ON
+  );
+END;
+
+	-- Step 2: Score service requests + time-series trend
+	WITH daily_service_value AS (
+	  SELECT TRUNC(CAST(created_at AS DATE)) AS day,
+	    SUM(request_value) AS service_value,
+	    ROW_NUMBER() OVER (ORDER BY TRUNC(CAST(created_at AS DATE))) AS rn
+	  FROM care_service_requests
+	  WHERE created_at >= SYSDATE - 30
+	  GROUP BY TRUNC(CAST(created_at AS DATE))
+	),
 params AS (
-  SELECT REGR_SLOPE(revenue, rn) AS slope,
-         REGR_INTERCEPT(revenue, rn) AS intercept,
-         REGR_R2(revenue, rn) AS r_squared,
-         AVG(revenue) AS average_revenue
-  FROM daily_revenue
+  SELECT REGR_SLOPE(service_value, rn)     AS slope,
+         REGR_INTERCEPT(service_value, rn) AS intercept,
+         REGR_R2(service_value, rn)        AS r2
+  FROM daily_service_value
+),
+-- GLM model: per-request predicted service value
+glm_stats AS (
+  SELECT AVG(PREDICTION(REVENUE_PREDICT_MODEL USING *))
+    AS avg_predicted
+  FROM OML_REVENUE_TRAINING_V
 )
-SELECT d.day, d.revenue, d.order_count,
-       ROUND(p.slope * d.rn + p.intercept, 2) AS trend_line,
-       ROUND(AVG(d.revenue) OVER (ORDER BY d.rn ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 2) AS moving_average_7d,
-       ROUND(p.r_squared, 4) AS r_squared,
-       ROUND(p.average_revenue, 2) AS average_revenue
-FROM daily_revenue d CROSS JOIN params p
-ORDER BY d.day;`} />
+SELECT day, service_value, slope * rn + intercept AS trend,
+  r2, avg_predicted
+FROM daily_service_value CROSS JOIN params CROSS JOIN glm_stats;`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">Dual Model Pipeline</div>
         <DiagramBox label="Service-value training view (OML_REVENUE_TRAINING_V)" sub="features: care-site tier, service value, urgency, items, avg value" color="#4C825C" />
-        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ REGR_SLOPE</div>
-        <DiagramBox label="OLS Trend Statistics" sub="slope, intercept, R², and average service value" color="#C74634" />
-        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ window aggregate</div>
-        <DiagramBox label="Seven-Day Moving Average" sub="read-only SQL over governed orders" color="#437C94" />
+        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CREATE_MODEL</div>
+        <DiagramBox label="REVENUE_PREDICT_MODEL (GLM)" sub="ALGO_GENERALIZED_LINEAR_MODEL · PREP_AUTO" color="#C74634" />
+        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ PREDICTION()</div>
+        <DiagramBox label="Per-Request Service Value Prediction" sub="GLM scores each service request inline in SQL" color="#437C94" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">+ REGR_SLOPE</div>
         <DiagramBox label="OLS Trend + Forward Projection" sub="REGR_R2 fit quality · CI widens 7%/day" color="#AA643B" />
       </div>
@@ -357,63 +367,70 @@ function ClustersOraclePanel() {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">
-          Care-Service Grouping - SQL Quantiles
+          PRODUCT_CLUSTER_MODEL - K-Means Clustering
         </p>
         <p className="text-sm text-[var(--color-text)] leading-relaxed">
-          This read-only fallback ranks care services by demand, revenue, and signal engagement, then uses{' '}
-          <code className="text-xs tone-teal">NTILE(5)</code> to form reproducible service groups. It does not
-          claim a persisted K-Means model.
+          A <span className="tone-teal font-mono">K-Means</span> model (5 clusters) trained via{' '}
+          <code className="text-xs tone-teal">DBMS_DATA_MINING.CREATE_MODEL</code> on 8 service behavior
+          features (service value, service activity, signal engagement, sentiment). Care services are assigned using{' '}
+          <code className="text-xs tone-teal">CLUSTER_ID()</code> with{' '}
+          <code className="text-xs tone-teal">CLUSTER_PROBABILITY()</code> - real trained K-Means
+          with convergence, not manual centroid selection. The model persists in the database and
+          scores new care services automatically.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <FeatureBadge label="Read-Only Oracle SQL" color="cyan" />
-        <FeatureBadge label="Composite Score" color="cyan" />
-        <FeatureBadge label="NTILE(5)" color="purple" />
-        <FeatureBadge label="Deterministic Groups" color="purple" />
+        <FeatureBadge label="DBMS_DATA_MINING" color="cyan" />
+        <FeatureBadge label="ALGO_KMEANS (5 clusters)" color="cyan" />
+        <FeatureBadge label="CLUSTER_ID()" color="purple" />
+        <FeatureBadge label="CLUSTER_PROBABILITY()" color="purple" />
         <FeatureBadge label="8 Behavioral Features" color="green" />
         <FeatureBadge label="ONNX Embeddings Available" color="orange" />
         <FeatureBadge label="In-DB Model Persistence" color="yellow" />
       </div>
-      <SqlBlock code={`-- Read-only fallback query. Services are grouped with SQL quantiles; no K-Means model is required.
-WITH product_cluster_features AS (
-  SELECT p.product_id, p.product_name, p.category, p.unit_price,
-         NVL(sales.units_sold, 0) AS units_sold,
-         NVL(sales.revenue, 0) AS revenue,
-         NVL(eng.total_engagement, 0) AS total_engagement,
-         NVL(eng.avg_sentiment, .5) AS avg_sentiment,
-         NVL(eng.avg_virality, 0) AS avg_virality
-  FROM products p
-  LEFT JOIN (
-    SELECT product_id, SUM(quantity) AS units_sold, SUM(line_total) AS revenue
-    FROM order_items GROUP BY product_id
-  ) sales ON sales.product_id = p.product_id
-  LEFT JOIN (
-    SELECT ppm.product_id, SUM(sp.likes_count + sp.shares_count + sp.views_count) AS total_engagement,
-           AVG(sp.sentiment_score) AS avg_sentiment, AVG(sp.virality_score) AS avg_virality
-    FROM post_product_mentions ppm
-    JOIN social_posts sp ON sp.post_id = ppm.post_id
-    GROUP BY ppm.product_id
-  ) eng ON eng.product_id = p.product_id
-  WHERE p.is_active = 1
-),
-scored_products AS (
-  SELECT pcf.*, ROUND(pcf.revenue * .001 + pcf.units_sold * .8 +
-         pcf.total_engagement * .0005 + pcf.avg_virality * 3 + pcf.unit_price * .05, 4) AS composite_score,
-         NTILE(5) OVER (ORDER BY pcf.total_engagement DESC, pcf.units_sold DESC, pcf.revenue DESC, pcf.product_id) AS cluster_id
-  FROM product_cluster_features pcf
-)
-SELECT product_name, category, unit_price, units_sold, total_engagement,
-       cluster_id, composite_score
-FROM scored_products
-ORDER BY cluster_id, composite_score DESC, product_name
-FETCH FIRST 50 ROWS ONLY;`} />
+      <SqlBlock code={`-- Step 1: Train K-Means model (one-time)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => 'PRODUCT_CLUSTER_MODEL',
+    mining_function => DBMS_DATA_MINING.CLUSTERING,
+    data_table_name => 'OML_PRODUCT_CLUSTER_V',
+    case_id_column_name => 'PRODUCT_ID',
+    settings_table_name => 'PROD_CLUSTER_SETTINGS'
+    -- ALGO_KMEANS, 5 clusters, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score care services with CLUSTER_ID()
+SELECT p.product_name, p.category, p.unit_price,
+
+  -- K-Means cluster assignment
+  CLUSTER_ID(PRODUCT_CLUSTER_MODEL USING
+    pcv.unit_price, pcv.weight_kg,
+    pcv.service_activity, pcv.service_value,
+    pcv.request_count, pcv.signal_activity,
+    pcv.avg_sentiment, pcv.avg_criticality
+  ) AS cluster_id,
+
+  -- Membership probability (0.0 to 1.0)
+  ROUND(CLUSTER_PROBABILITY(
+    PRODUCT_CLUSTER_MODEL USING *
+  ), 4) AS cluster_prob
+
+FROM OML_PRODUCT_CLUSTER_V pcv
+JOIN products p ON pcv.PRODUCT_ID = p.PRODUCT_ID
+ORDER BY cluster_id, cluster_prob DESC;
+
+-- Training view features:
+-- unit_price, weight_kg, service activity, service value,
+-- request_count, signal_activity, avg_sentiment,
+-- avg_criticality`} />
       <div className="oml-model-flow">
-        <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">SQL Service Grouping</div>
-        <DiagramBox label="Care-Service Demand + Signals" sub="revenue, units, engagement, sentiment" color="#4F7D7B" />
-        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ composite score</div>
-        <DiagramBox label="NTILE(5)" sub="five reproducible service groups" color="#AA643B" />
-        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ result</div>
-        <DiagramBox label="Group + Score" sub="read-only SQL fallback" color="#796087" />
+        <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">DBMS_DATA_MINING K-Means Pipeline</div>
+        <DiagramBox label="OML_PRODUCT_CLUSTER_V (187 care services)" sub="8 features: service value, activity, signal engagement, sentiment" color="#4F7D7B" />
+        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CREATE_MODEL</div>
+        <DiagramBox label="PRODUCT_CLUSTER_MODEL (K-Means)" sub="ALGO_KMEANS · 5 clusters · PREP_AUTO · convergence" color="#AA643B" />
+        <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CLUSTER_ID()</div>
+        <DiagramBox label="Cluster Assignment + Probability" sub="trained centroids · proper distance calculation" color="#796087" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ JOIN</div>
         <DiagramBox label="Care Service Details + Cluster Stats" sub="size · top category · avg probability" color="#4C825C" />
       </div>
@@ -426,81 +443,69 @@ function InventoryOraclePanel() {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">
-          Demand Signal + Capacity and Supply Intelligence
+          SERVICE_DEMAND_RISK_MODEL × Capacity and Supply Intelligence
         </p>
         <p className="text-sm text-[var(--color-text)] leading-relaxed">
-          Joins the application's <span className="tone-plum font-mono">read-only SQL signal score</span> with
-          live capacity and supply levels across care logistics sites, then compares predicted demand against
-          on-hand supply to identify operational risk.
+          Joins <span className="tone-plum font-mono">DEMAND_SURGE_MODEL</span> (Random Forest) predictions with
+          live capacity and supply levels across all care logistics sites. Oracle scores each care service in real-time using{' '}
+          <code className="text-xs tone-plum">PREDICTION_PROBABILITY()</code>, then compares predicted demand
+          against on-hand supply to identify risk - care services where compliance-driven or capacity-driven demand will exceed available capacity.
           The <code className="text-xs tone-plum">demand_forecasts</code> table stores daily OML predictions.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <FeatureBadge label="SQL Signal Score" color="purple" />
-        <FeatureBadge label="CASE Risk Status" color="purple" />
+        <FeatureBadge label="DEMAND_SURGE_MODEL" color="purple" />
+        <FeatureBadge label="PREDICTION_PROBABILITY()" color="purple" />
         <FeatureBadge label="demand_forecasts table" color="violet" />
         <FeatureBadge label="capacity/supply × logistics sites" color="cyan" />
         <FeatureBadge label="Service Value at Risk" color="red" />
         <FeatureBadge label="Days of Supply" color="green" />
       </div>
-      <SqlBlock code={`-- Read-only fallback query. Inventory risk uses the same SQL signal score as the app fallback.
-WITH product_features AS (
-  SELECT p.product_id, p.category, p.unit_price,
-         NVL(eng.total_posts, 0) AS total_posts, NVL(eng.avg_virality, 0) AS avg_virality,
-         NVL(eng.viral_posts, 0) AS viral_posts, NVL(eng.rising_posts, 0) AS rising_posts,
-         NVL(eng.total_views, 0) AS total_views, NVL(sales.units_sold, 0) AS units_sold
-  FROM products p
-  LEFT JOIN (
-    SELECT ppm.product_id, COUNT(*) AS total_posts, AVG(sp.virality_score) AS avg_virality,
-           SUM(CASE WHEN sp.momentum_flag = 'viral' THEN 1 ELSE 0 END) AS viral_posts,
-           SUM(CASE WHEN sp.momentum_flag = 'rising' THEN 1 ELSE 0 END) AS rising_posts,
-           SUM(sp.views_count) AS total_views
-    FROM post_product_mentions ppm JOIN social_posts sp ON sp.post_id = ppm.post_id
-    GROUP BY ppm.product_id
-  ) eng ON eng.product_id = p.product_id
-  LEFT JOIN (
-    SELECT product_id, SUM(quantity) AS units_sold FROM order_items GROUP BY product_id
-  ) sales ON sales.product_id = p.product_id
-  WHERE p.is_active = 1
-),
-scored_products AS (
-  SELECT pf.product_id, ROUND(LEAST(99,
-    pf.avg_virality * .45 + LEAST(pf.total_posts, 40) * .9 + LEAST(pf.viral_posts, 10) * 6 +
-    LEAST(pf.rising_posts, 15) * 2 + LEAST(pf.total_views / 2000, 25) + LEAST(pf.units_sold, 80) * .2
-  ), 1) AS surge_probability
-  FROM product_features pf
-),
-forecast_rollup AS (
-  SELECT product_id, MAX(predicted_demand) AS predicted_demand, MAX(social_factor) AS social_factor
-  FROM demand_forecasts
-  WHERE forecast_date = TRUNC(SYSDATE)
-  GROUP BY product_id
-)
-SELECT p.product_name, fc.center_name, i.quantity_on_hand, i.reorder_point,
-       NVL(fr.predicted_demand, 0) AS predicted_demand,
-       NVL(fr.social_factor, 1) AS social_factor,
-       NVL(sp.surge_probability, 0) AS signal_score,
-       CASE WHEN i.quantity_on_hand = 0 THEN 'OUT_OF_STOCK'
-            WHEN i.quantity_on_hand < i.reorder_point * .5 THEN 'CRITICAL'
-            WHEN i.quantity_on_hand < NVL(fr.predicted_demand, 0) THEN 'AT_RISK'
-            WHEN i.quantity_on_hand < i.reorder_point THEN 'LOW'
-            ELSE 'ADEQUATE' END AS stock_status,
-       CASE WHEN NVL(fr.predicted_demand, 0) > 0
-            THEN ROUND(i.quantity_on_hand / (fr.predicted_demand / 7), 1) END AS days_of_supply,
-       CASE WHEN i.quantity_on_hand < NVL(fr.predicted_demand, 0)
-            THEN ROUND((fr.predicted_demand - i.quantity_on_hand) * p.unit_price, 2)
-            ELSE 0 END AS service_value_at_risk
+      <SqlBlock code={`-- OML Capacity and Supply Intelligence (actual query)
+SELECT p.product_name, fc.center_name,
+  i.quantity_on_hand, i.reorder_point,
+  df.predicted_demand, df.social_factor AS signal_factor,
+
+  -- Real-time OML scoring
+  PREDICTION(DEMAND_SURGE_MODEL USING
+    p.category, p.unit_price,
+    eng.total_posts, eng.avg_sentiment, ...
+  ) AS oml_surge_prediction,
+
+  ROUND(PREDICTION_PROBABILITY(
+    DEMAND_SURGE_MODEL, 'SURGE' USING ...
+  ) * 100, 1) AS oml_surge_probability,
+
+  -- Supply risk metrics
+  CASE WHEN qty = 0 THEN 'OUT_OF_STOCK'
+       WHEN qty < reorder * 0.5 THEN 'CRITICAL'
+       WHEN qty < predicted_demand THEN 'AT_RISK'
+  END AS stock_status,
+
+  -- Days of supply at predicted consumption rate
+  ROUND(qty / (predicted_demand / 7), 1)
+    AS days_of_supply,
+
+  -- Service value at risk from capacity or stockout
+  (predicted_demand - qty) * unit_price
+    AS service_value_at_risk
+
 FROM inventory i
-JOIN products p ON p.product_id = i.product_id
-JOIN fulfillment_centers fc ON fc.center_id = i.center_id
-LEFT JOIN forecast_rollup fr ON fr.product_id = p.product_id
-LEFT JOIN scored_products sp ON sp.product_id = p.product_id
-WHERE fc.is_active = 1
-ORDER BY service_value_at_risk DESC, signal_score DESC
-FETCH FIRST 100 ROWS ONLY;`} />
+JOIN demand_forecasts df ON ...
+  AND df.forecast_date = TRUNC(SYSDATE)
+ORDER BY
+  CASE stock_status
+    WHEN 'OUT_OF_STOCK' THEN 1
+    WHEN 'CRITICAL' THEN 2
+    WHEN 'AT_RISK' THEN 3
+    WHEN 'LOW' THEN 4
+    ELSE 5
+  END,
+  service_value_at_risk DESC,
+  oml_surge_probability DESC;`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">Capacity and Supply Intelligence Pipeline</div>
-        <DiagramBox label="SQL Demand Signal Score" sub="weighted signal and order evidence per care service" color="#796087" />
+        <DiagramBox label="DEMAND_SURGE_MODEL (Random Forest)" sub="PREDICTION_PROBABILITY('SURGE') per care service" color="#796087" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ scores stored in</div>
         <DiagramBox label="demand_forecasts (daily OML predictions)" sub="predicted_demand · signal_factor · confidence band" color="#A36472" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ JOIN</div>
@@ -597,6 +602,8 @@ export default function OMLAnalytics() {
           </span>
         </p>
       </div>
+
+      <SceneStoryPanel scene="oml" />
 
       {/* ── Oracle Panel - switches content based on active tab ── */}
       <RegisterOraclePanel title="Healthcare Risk and Capacity Analytics">

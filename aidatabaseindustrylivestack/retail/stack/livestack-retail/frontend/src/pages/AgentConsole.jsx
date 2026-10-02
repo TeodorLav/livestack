@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip as MapTooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { api } from '../utils/api';
+import { api, apiFetch } from '../utils/api';
 import { useData } from '../hooks/useData';
 import { timeAgo } from '../utils/format';
 import { FeatureBadge, SqlBlock, DiagramBox } from '../components/OracleInfoPanel';
 import { RegisterOraclePanel } from '../context/OraclePanelContext';
 import { JetButton, JetInputText, JetProgressCircle, JetSelectSingle } from '../components/JetControls';
+import { RetailSceneStory } from '../components/RetailStory';
+import { useUser } from '../context/UserContext';
 
 function JetGlyph({ iconClass, className = '', style }) {
   return <span className={`oj-fwk-icon ${iconClass} ${className}`.trim()} aria-hidden="true" style={style} />;
@@ -20,17 +22,39 @@ const STATUS_ICONS = {
 };
 
 const AGENT_COLORS = {
-  trend_detection_agent: '#AA643B',
-  inventory_agent: '#437C94',
-  fulfillment_agent: '#4C825C',
-  master_orchestrator: '#796087',
-  chat_agent: '#4F7D7B',
+  demand_signal_agent: '#AA643B',
+  fulfillment_optimization_agent: '#437C94',
+  commerce_intelligence_agent: '#4C825C',
+  returns_triage_agent: '#C74634',
+};
+
+// Keep the audit feed presenter-friendly while retaining the stable names
+// used by the router and Oracle audit table.
+const AGENT_NAME_LABELS = {
+  demand_signal_agent: 'Demand Signal Agent',
+  fulfillment_optimization_agent: 'Fulfillment Optimization Agent',
+  commerce_intelligence_agent: 'Commerce Intelligence Agent',
+  returns_triage_agent: 'Returns Triage Agent',
+};
+
+const ACTION_TYPE_LABELS = {
+  agent_query_completed: 'Agent query completed',
+  review_proposal: 'Review proposal',
+};
+
+const ENTITY_TYPE_LABELS = {
+  agent_query: 'governed question',
+  demand_signals: 'demand signals',
+  fulfillment: 'fulfillment',
+  commerce: 'commerce',
+  returns: 'returns',
 };
 
 const TEAM_INFO = {
-  SOCIAL_TREND_TEAM: { label: 'Sporting Goods Demand Signal Agent', color: '#AA643B', iconClass: 'oj-fwk-icon-sortrelevancehigh', desc: 'Demand and service signal analysis' },
-  FULFILLMENT_TEAM:  { label: 'Fulfillment Optimization Agent', color: '#437C94', iconClass: 'oj-fwk-icon-tree-document', desc: 'Inventory and logistics' },
-  COMMERCE_TEAM:     { label: 'Commerce Intelligence Agent', color: '#4C825C', iconClass: 'oj-fwk-icon-grid', desc: 'Orders and revenue' },
+  DEMAND_SIGNAL_AGENT: { label: 'Demand Signal Agent', color: '#AA643B', iconClass: 'oj-fwk-icon-sortrelevancehigh', desc: 'Demand and creator signals' },
+  FULFILLMENT_OPTIMIZATION_AGENT: { label: 'Fulfillment Optimization Agent', color: '#437C94', iconClass: 'oj-fwk-icon-tree-document', desc: 'Inventory and spatial routing' },
+  COMMERCE_INTELLIGENCE_AGENT: { label: 'Commerce Intelligence Agent', color: '#4C825C', iconClass: 'oj-fwk-icon-grid', desc: 'Orders and revenue' },
+  RETURNS_TRIAGE_AGENT: { label: 'Returns Triage Agent', color: '#C74634', iconClass: 'oj-fwk-icon-list', desc: 'Return risk and vector evidence' },
 };
 
 const EXAMPLE_QUESTIONS = [
@@ -43,11 +67,35 @@ const EXAMPLE_QUESTIONS = [
   { text: 'Find high-momentum sporting-goods signals in the last 24 hours', iconClass: 'oj-fwk-icon-sortrelevancehigh', team: 'trends' },
   { text: 'Check inventory for AllTerrain Hiking Boots', iconClass: 'oj-fwk-icon-tree-document', team: 'fulfillment' },
   { text: 'Find nearest fulfillment center with AllTerrain Hiking Boots for a customer in Denver', iconClass: 'oj-fwk-icon-arrowtail-e', team: 'fulfillment' },
+  { text: 'What evidence should an Admin review for high-risk return cases?', iconClass: 'oj-fwk-icon-list', team: 'returns' },
 ];
+
+function messagesFromConversation(conversation) {
+  return (conversation?.turns || []).flatMap((turn) => [
+    { role: 'user', text: turn.question, time: turn.createdAt },
+    {
+      role: 'agent', text: turn.response, team: turn.team,
+      agentUsed: turn.answer?.mode === 'grounded_model',
+      route: turn.route, claims: turn.claims || turn.answer?.claims || [],
+      citations: turn.evidence?.sources || [],
+      contradictions: turn.evidence?.contradictions || [],
+      insufficientEvidence: turn.evidence?.insufficientEvidence,
+      telemetry: turn.telemetry, trace: turn.answer?.trace || [],
+      deepLinks: turn.route?.deepLink ? [turn.route.deepLink] : [],
+      time: turn.createdAt,
+    },
+  ]);
+}
 
 function getProfileDisplayLabel(name, index = 0) {
   if (!name) return `Runtime Profile ${index + 1}`;
   return `Runtime Profile ${index + 1}`;
+}
+
+function labelFor(map, value) {
+  if (!value) return '';
+  const raw = String(value).trim();
+  return map[raw] || raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 // ── Fulfillment Route Map (rendered inside chat messages) ─────────────────────
@@ -152,8 +200,11 @@ function FulfillmentRouteMap({ routeData }) {
 }
 
 // ── Chat Agent Component ─────────────────────────────────────────────────────
-function ChatAgent({ onActionLogged }) {
+function ChatAgent({ onActionLogged, userKey }) {
   const [messages, setMessages] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
+  const [conversationLoading, setConversationLoading] = useState(true);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
@@ -162,6 +213,33 @@ function ChatAgent({ onActionLogged }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const loadConversation = useCallback(async (id) => {
+    if (!id) { setConversationId(null); setMessages([]); return; }
+    const conversation = await apiFetch(`/agents/conversations/${encodeURIComponent(id)}`);
+    setConversationId(conversation.id);
+    setMessages(messagesFromConversation(conversation));
+  }, []);
+
+  const refreshConversations = useCallback(async (preferredId = null) => {
+    setConversationLoading(true);
+    try {
+      const result = await apiFetch('/agents/conversations?limit=20');
+      const list = result.conversations || [];
+      setConversations(list);
+      const nextId = preferredId || list[0]?.id || null;
+      if (nextId) await loadConversation(nextId);
+      else { setConversationId(null); setMessages([]); }
+    } finally {
+      setConversationLoading(false);
+    }
+  }, [loadConversation]);
+
+  useEffect(() => {
+    setConversationId(null);
+    setMessages([]);
+    refreshConversations().catch(() => setConversationLoading(false));
+  }, [refreshConversations, userKey]);
 
   const sendMessage = useCallback(async (text) => {
     const question = (text || input).trim();
@@ -172,7 +250,11 @@ function ChatAgent({ onActionLogged }) {
     setSending(true);
 
     try {
-      const result = await api.agents.chat(question);
+      const result = await apiFetch('/agents/chat', {
+        method: 'POST',
+        body: JSON.stringify({ question, conversationId }),
+      });
+      setConversationId(result.conversationId);
       setMessages(prev => [...prev, {
         role: 'agent',
         text: result.response,
@@ -181,9 +263,23 @@ function ChatAgent({ onActionLogged }) {
         agentUsed: result.agentUsed,
         toolsUsed: result.toolsUsed,
         data: result.data,
+        trace: result.trace,
+        route: result.route,
+        claims: result.claims,
+        citations: result.citations,
+        contradictions: result.contradictions,
+        insufficientEvidence: result.insufficientEvidence,
+        deepLinks: result.deepLinks,
+        telemetry: result.telemetry,
+        security: result.security,
         elapsed: result.elapsed,
         time: new Date(),
       }]);
+      setConversations(prev => {
+        const existing = prev.find(item => item.id === result.conversationId);
+        const updated = { ...(existing || {}), id: result.conversationId, title: existing?.title || question.slice(0, 120), updatedAt: new Date().toISOString() };
+        return [updated, ...prev.filter(item => item.id !== result.conversationId)];
+      });
       if (onActionLogged) onActionLogged();
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -195,12 +291,17 @@ function ChatAgent({ onActionLogged }) {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [input, sending, onActionLogged]);
+  }, [input, sending, onActionLogged, conversationId]);
 
-  const clearChat = useCallback(() => {
+  const clearChat = useCallback(async () => {
+    if (conversationId) {
+      try { await apiFetch(`/agents/conversations/${encodeURIComponent(conversationId)}`, { method: 'DELETE' }); } catch (_) {}
+    }
     setMessages([]);
     setInput('');
-  }, []);
+    setConversationId(null);
+    setConversations(prev => prev.filter(item => item.id !== conversationId));
+  }, [conversationId]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -220,19 +321,25 @@ function ChatAgent({ onActionLogged }) {
           <div>
             <h3 className="text-sm font-bold">Chat with AI Agents</h3>
             <p className="text-[10px] text-[var(--color-text-dim)]">
-              Ask questions routed to <span className="font-semibold text-[var(--color-text)]">Demand &amp; Service Signal</span>, <span className="font-semibold text-[var(--color-text)]">Fulfillment Optimization</span>, or <span className="font-semibold text-[var(--color-text)]">Commerce Intelligence</span> agents
+              Ask questions routed to <span className="font-semibold text-[var(--color-text)]">Demand Signal</span>, <span className="font-semibold text-[var(--color-text)]">Fulfillment</span>, <span className="font-semibold text-[var(--color-text)]">Commerce</span>, or <span className="font-semibold text-[var(--color-text)]">Returns Triage</span> agents
             </p>
           </div>
         </div>
-        {messages.length > 0 && (
-          <JetButton
-            label="Clear"
-            iconClass="oj-fwk-icon oj-fwk-icon-cross"
-            chroming="outlined"
-            className="agent-console-clear-button"
-            onAction={clearChat}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {conversations.length > 0 && (
+            <select
+              aria-label="Saved Agent Console conversation"
+              value={conversationId || ''}
+              onChange={(event) => loadConversation(event.target.value).catch(() => {})}
+              className="text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 max-w-[220px]"
+            >
+              {conversations.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+            </select>
+          )}
+          {messages.length > 0 && (
+            <JetButton label="New conversation" iconClass="oj-fwk-icon oj-fwk-icon-plus" chroming="outlined" className="agent-console-clear-button" onAction={clearChat} />
+          )}
+        </div>
       </div>
 
       {/* Messages area */}
@@ -240,13 +347,18 @@ function ChatAgent({ onActionLogged }) {
         style={{ background: 'var(--color-surface)' }}>
 
         {/* Empty state: example questions */}
-        {messages.length === 0 && (
+        {conversationLoading && (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-[var(--color-text-dim)]">
+            <JetProgressCircle size="sm" ariaLabel="Loading saved conversation" /> Loading server conversation...
+          </div>
+        )}
+        {!conversationLoading && messages.length === 0 && (
           <div className="space-y-3 py-4">
             <div className="text-center mb-4">
               <JetGlyph iconClass="oj-fwk-icon-users" className="agent-console-empty-glyph tone-teal" />
               <p className="text-sm text-[var(--color-text-dim)]">Ask me anything about your sporting-goods service, demand, and customer signal data</p>
               <p className="text-[10px] text-[var(--color-text-dim)] mt-1">
-                Powered by <span className="font-semibold text-[var(--color-text)]">Ollama (llama3.2)</span> for reasoning + Oracle SQL and PL/SQL tools
+                Oracle runs bounded SQL, SQL/PGQ, Spatial distance, and Vector Search tools; Ollama only phrases citation-validated claims
               </p>
             </div>
             <div className="agent-console-example-grid">
@@ -307,8 +419,9 @@ function ChatAgent({ onActionLogged }) {
                       {(TEAM_INFO[msg.team] || {}).label || msg.team}
                     </span>
                     {msg.agentUsed && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded surface-plum-soft tone-plum">OLLAMA ROUTED</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded surface-plum-soft tone-plum">CITATION-VALIDATED OLLAMA</span>
                     )}
+                    {msg.route?.confidence != null && <span className="text-[9px] text-[var(--color-text-dim)]">route {Math.round(msg.route.confidence * 100)}% · margin {msg.route.margin}</span>}
                     <span className="text-[10px] text-[var(--color-text-dim)] ml-auto">{msg.elapsed}ms</span>
                   </div>
 
@@ -317,6 +430,51 @@ function ChatAgent({ onActionLogged }) {
                     style={{ background: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
                     {msg.text}
                   </div>
+
+                  {msg.route?.handoff && (
+                    <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(67,124,148,0.08)', border: '1px solid rgba(67,124,148,0.25)' }}>
+                      Controlled handoff: {TEAM_INFO[msg.route.handoff.from]?.label || msg.route.handoff.from} → {TEAM_INFO[msg.route.handoff.to]?.label || msg.route.handoff.to}
+                    </div>
+                  )}
+
+                  {msg.claims?.length > 0 && (
+                    <div className="space-y-2" data-testid="agent-grounded-claims">
+                      {msg.claims.map((claim, claimIndex) => (
+                        <div key={claimIndex} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs">
+                          <p>{claim.text}</p>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {(claim.citations || []).map(citation => (
+                              <details key={citation.id} className="inline-block">
+                                <summary className="cursor-pointer list-none rounded-full px-2 py-0.5 text-[9px] font-mono tone-ocean" style={{ background: 'rgba(67,124,148,0.1)' }}>{citation.id}</summary>
+                                <div className="mt-1 max-w-xl rounded-md bg-[var(--color-surface)] p-2 text-[10px] text-[var(--color-text-dim)]">
+                                  <strong>{citation.title}</strong><br />{citation.excerpt}<br />
+                                  <span>Source type: {citation.type} · queried {citation.queryTimestamp || 'during this turn'}</span>
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {msg.insufficientEvidence && (
+                    <div className="rounded-lg px-3 py-2 text-xs tone-sienna" data-testid="agent-insufficient-evidence" style={{ background: 'rgba(170,100,59,0.08)', border: '1px solid rgba(170,100,59,0.25)' }}>
+                      Insufficient governed evidence was visible; no unsupported conclusion was generated.
+                    </div>
+                  )}
+                  {msg.contradictions?.length > 0 && (
+                    <div className="rounded-lg px-3 py-2 text-xs" data-testid="agent-contradictions" style={{ background: 'rgba(199,70,52,0.06)', border: '1px solid rgba(199,70,52,0.2)' }}>
+                      <strong>Evidence needs reconciliation</strong>
+                      <ul className="list-disc ml-4 mt-1">{msg.contradictions.map((item, index) => <li key={index}>{item}</li>)}</ul>
+                    </div>
+                  )}
+
+                  {msg.deepLinks?.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {msg.deepLinks.map(link => <a key={link.href} href={link.href} className="text-xs font-semibold tone-ocean underline">{link.label}</a>)}
+                    </div>
+                  )}
 
                   {/* Route map if present */}
                   {msg.data && msg.data.type === 'route' && (
@@ -370,6 +528,27 @@ function ChatAgent({ onActionLogged }) {
                       ))}
                     </div>
                   )}
+
+                  {msg.security && (
+                    <div className="flex flex-wrap gap-2 text-[9px] text-[var(--color-text-dim)]" data-agent-security>
+                      <span>VPD user: <strong className="text-[var(--color-text)]">{msg.security.vpdUser}</strong></span>
+                      <span>·</span>
+                      <span>Scope: <strong className="text-[var(--color-text)]">{msg.security.accessScope}</strong></span>
+                      <span>·</span>
+                      <span>{msg.security.readOnly ? 'Read-only tool run' : 'Mutation run'}</span>
+                    </div>
+                  )}
+
+                  {msg.trace && msg.trace.length > 0 && (
+                    <details className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-[10px]">
+                      <summary className="cursor-pointer font-semibold">Orchestration trace</summary>
+                      <ol className="mt-2 space-y-1 font-mono text-[var(--color-text-dim)]">
+                        {msg.trace.map((step, traceIndex) => (
+                          <li key={`${step.stage}-${traceIndex}`}>{traceIndex + 1}. {step.stage}: {step.status}{step.detail ? ` · ${Array.isArray(step.detail) ? step.detail.join(', ') : step.detail}` : ''}</li>
+                        ))}
+                      </ol>
+                    </details>
+                  )}
                 </div>
               )}
 
@@ -407,7 +586,7 @@ function ChatAgent({ onActionLogged }) {
           <div className="flex-1 min-w-[260px]" onKeyDown={handleKeyDown}>
             <JetInputText
               value={input}
-              disabled={sending}
+              disabled={sending || conversationLoading}
               elementRef={inputRef}
               ariaLabel="Ask an agent runtime question"
               placeholder="Ask the agent runtime a question..."
@@ -447,8 +626,11 @@ const FALLBACK_PROFILE_INFO = {
 };
 
 export default function AgentConsole() {
+  const { currentUser } = useUser();
   const [activeProfile, setActiveProfile] = useState('SC_LLAMA_PROFILE');
   const [profileSwitching, setProfileSwitching] = useState(false);
+  const [proposalRunning, setProposalRunning] = useState(false);
+  const [proposalMessage, setProposalMessage] = useState('');
   const [profileInfo, setProfileInfo] = useState(FALLBACK_PROFILE_INFO);
   const activeProfileInfo = profileInfo[activeProfile] || FALLBACK_PROFILE_INFO[activeProfile] || {
     label: 'Runtime Profile',
@@ -500,6 +682,25 @@ export default function AgentConsole() {
     }
   }, [activeProfile, profileSwitching]);
 
+  const runGovernedProposalCycle = useCallback(async () => {
+    if (proposalRunning || String(currentUser?.ROLE || '').toLowerCase() !== 'admin') return;
+    const confirmed = window.confirm(
+      'Create four governed review proposals in agent_actions? No orders, inventory, customers, or return decisions will be changed.'
+    );
+    if (!confirmed) return;
+    setProposalRunning(true);
+    setProposalMessage('');
+    try {
+      const result = await api.agents.runCycle();
+      setProposalMessage(result.message);
+      refetchActions();
+    } catch (error) {
+      setProposalMessage(error.message);
+    } finally {
+      setProposalRunning(false);
+    }
+  }, [currentUser, proposalRunning, refetchActions]);
+
   return (
     <div className="space-y-6 fade-in">
 
@@ -509,51 +710,87 @@ export default function AgentConsole() {
           <div>
             <p className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">What's Happening</p>
             <p className="text-[var(--color-text)] leading-relaxed">
-              These agent workflows run through the application layer, with <span className="font-mono text-[var(--color-text)]">Ollama (llama3.2)</span> handling reasoning
-              and Oracle AI Database 26ai executing SQL and PL/SQL tools against live data. Three specialist teams (<code className="text-xs font-semibold" style={{ color: 'var(--color-text)', borderBottom: '1px solid #AA643B' }}>SOCIAL_TREND_TEAM</code>,&nbsp;
-              <code className="text-xs font-semibold" style={{ color: 'var(--color-text)', borderBottom: '1px solid #437C94' }}>FULFILLMENT_TEAM</code>, <code className="text-xs font-semibold" style={{ color: 'var(--color-text)', borderBottom: '1px solid #4C825C' }}>COMMERCE_TEAM</code>) route work across
-              trend analysis, fulfillment, and commerce tasks. Oracle stores the source data, runs the queries, and records decisions in
-              <code className="text-xs font-semibold" style={{ color: 'var(--color-text)', borderBottom: '1px solid #A36472' }}> agent_actions</code> and <code className="text-xs font-semibold" style={{ color: 'var(--color-text)', borderBottom: '1px solid #A36472' }}>event_stream</code>;
-              the AI runtime is external to the database.
+              Server-owned conversations retain the selected user, VPD scope, dataset generation, specialist, and entity context. A deterministic router selects one of four bounded specialists before Oracle AI Database 26ai executes an allowlisted, read-only SQL, SQL/PGQ, exact Spatial distance, or generation-bound Vector Search query. <span className="font-mono text-[var(--color-text)]">Ollama (llama3.2)</span> can only phrase claims from those returned sources, and every accepted claim must pass citation, number, and inference validation. It cannot generate executable SQL, select another tool, or write an operational record.
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             <FeatureBadge label="Ollama Runtime" color="purple" />
             <FeatureBadge label="llama3.2" color="pink" />
-            <FeatureBadge label="Oracle SQL / PL/SQL Tools" color="orange" />
+            <FeatureBadge label="Oracle SQL / SQL-PGQ Tools" color="orange" />
             <FeatureBadge label="Application Orchestration" color="blue" />
-            <FeatureBadge label="agent_actions (Audit Log)" color="blue" />
+            <FeatureBadge label="agent_actions (Question + Proposal Audit)" color="blue" />
             <FeatureBadge label="event_stream (Native JSON)" color="yellow" />
             <FeatureBadge label="Vector RAG Retrieval" color="cyan" />
-            <FeatureBadge label="In-DB ML Scoring" color="green" />
+            <FeatureBadge label="Server-persisted Conversations" color="green" />
           </div>
-          <p className="text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-            Architecture/write example only — this is not a standalone runnable read-only query. The application owns these audited writes.
-          </p>
-          <SqlBlock code={`-- Agent runtime: app orchestration + Ollama + Oracle AI Database 26ai
--- The app resolves intent -> routes to a specialist team -> executes SQL / PL/SQL in Oracle
--- Ollama (llama3.2) provides reasoning; Oracle remains the data and execution layer
+          <SqlBlock code={`-- Runtime: server conversation -> deterministic route -> allowlisted Oracle tool
+-- One read-only Oracle transaction runs in the selected user's VPD context.
+-- Ollama sees aliased source packets only and cannot invoke a tool.
 
 -- Example flow:
--- 1. Classify the request as SOCIAL_TREND_TEAM
--- 2. Call detect_trending_products(p_hours=>24)
--- 3. Join inventory and fulfillment data in Oracle
--- 4. Return recommendations and write actions to audit tables
+-- 1. Classify request as RETURNS_TRIAGE_AGENT
+-- 2. Query RETAIL_RETURN_WORKBENCH_V
+-- 3. Rank RETURN_EVIDENCE_INDEX with VECTOR_DISTANCE(..., COSINE)
+-- 4. Validate every claim against stable source IDs
+-- 5. Persist the bounded turn and telemetry for this user + dataset generation
+-- 6. Append bounded specialist provenance to agent_actions for the Recent Agent Actions feed
 
--- Agent decisions written back atomically:
+-- Representative allowlisted specialist SQL (the router never generates SQL):
+SELECT from_influencer, to_influencer, connection_type, strength
+FROM GRAPH_TABLE (influencer_network
+  MATCH (src IS influencer)-[edge IS connects_to]->(dst IS influencer)
+  COLUMNS (src.influencer_id AS from_influencer,
+           dst.influencer_id AS to_influencer,
+           edge.connection_type AS connection_type,
+           edge.strength AS strength));
+
+SELECT ROUND(SDO_GEOM.SDO_DISTANCE(
+  customer.location, center.location, 0.005, 'unit=MILE'), 1) AS distance_mi
+FROM customers customer CROSS JOIN fulfillment_centers center;
+
+SELECT source_type, source_id,
+       VECTOR_DISTANCE(embedding,
+         VECTOR_EMBEDDING(ALL_MINILM_L12_V2 USING :question AS DATA),
+         COSINE) AS distance
+FROM return_evidence_index
+WHERE generation_id = :generation_id;
+
+INSERT INTO agent_conversation_turns (
+  turn_id, conversation_id, owner_username, dataset_generation_id,
+  turn_number, question, routed_team, route_status,
+  route_metadata, answer_payload, evidence_metadata, telemetry_payload
+) VALUES (:turn_id, :conversation_id, :username, :generation_id,
+  :turn_number, :question, :team, :route_status,
+  :route_json, :answer_json, :evidence_json, :telemetry_json);
+
+UPDATE agent_conversations
+SET last_team = :team, context_payload = :context_json,
+    turn_count = :turn_number, updated_at = SYSTIMESTAMP
+WHERE conversation_id = :conversation_id
+  AND owner_username = :username;
+
+INSERT INTO agent_runtime_telemetry (
+  correlation_id, conversation_id, turn_id, owner_username,
+  dataset_generation_id, event_type, event_payload, elapsed_ms
+) VALUES (:correlation_id, :conversation_id, :turn_id, :username,
+  :generation_id, 'agent_turn', :telemetry_json, :elapsed_ms);
+
+COMMIT; -- the turn, bounded evidence, context, and telemetry are atomic
+
+-- Explicit Admin cycle writes proposals only (separate from question audit rows):
 INSERT INTO agent_actions (agent_name, action_type, entity_type,
   entity_id, decision_payload, confidence, execution_status)
-VALUES ('trend_detection_agent','reorder_flag','product',
-  :product_id, :json_payload, 0.92, 'proposed');`} />
+VALUES ('returns_triage_agent','review_proposal','returns',
+  NULL, :json_payload, 0.90, 'proposed');`} />
           {/* Team / Agent / Tools grid */}
           <div>
             <p className="text-[10px] font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">Agent Teams &amp; Tools</p>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { team: 'SOCIAL_TREND_TEAM', agent: 'DEMAND_RETURNS_SIGNAL_AGENT', tools: ['TREND_SQL_TOOL', 'DETECT_TRENDS_TOOL', 'INFLUENCER_NETWORK_TOOL', 'LOG_DECISION_TOOL'], color: '#A36472' },
-                { team: 'FULFILLMENT_TEAM', agent: 'FULFILLMENT_OPTIMIZATION_AGENT', tools: ['COMMERCE_SQL_TOOL', 'CHECK_INVENTORY_TOOL', 'FULFILLMENT_ROUTE_TOOL', 'LOG_DECISION_TOOL'], color: '#AA643B' },
-                { team: 'COMMERCE_TEAM', agent: 'COMMERCE_INTELLIGENCE_AGENT', tools: ['COMMERCE_SQL_TOOL', 'LOG_DECISION_TOOL'], color: '#4C825C' },
-                { team: 'RETURNS_TRIAGE_TEAM', agent: 'RETURNS_TRIAGE_AGENT', tools: ['RETURN_POLICY_TOOL', 'VECTOR_EVIDENCE_TOOL', 'LOG_DECISION_TOOL'], color: '#C74634' },
+                { team: 'DEMAND_SIGNAL_AGENT', agent: 'DEMAND_SIGNAL_AGENT', tools: ['RETAIL_SIGNAL_SQL', 'CREATOR_GRAPH_QUERY'], color: '#A36472' },
+                { team: 'FULFILLMENT_OPTIMIZATION_AGENT', agent: 'FULFILLMENT_OPTIMIZATION_AGENT', tools: ['RETAIL_INVENTORY_SQL', 'ORACLE_SPATIAL_ROUTE'], color: '#AA643B' },
+                { team: 'COMMERCE_INTELLIGENCE_AGENT', agent: 'COMMERCE_INTELLIGENCE_AGENT', tools: ['RETAIL_COMMERCE_SQL'], color: '#4C825C' },
+                { team: 'RETURNS_TRIAGE_AGENT', agent: 'RETURNS_TRIAGE_AGENT', tools: ['RETURN_WORKBENCH_SQL', 'RETURN_VECTOR_SEARCH'], color: '#C74634' },
               ].map(t => (
                 <div key={t.team} className="rounded-xl border border-[var(--color-border)] overflow-hidden">
                   <div className="px-2 py-1.5 text-center" style={{ background: `${t.color}12`, borderBottom: `2px solid ${t.color}44` }}>
@@ -575,7 +812,7 @@ VALUES ('trend_detection_agent','reorder_flag','product',
             <div className="flex flex-wrap gap-2 text-[9px] text-[var(--color-text-dim)] mt-2">
               <span><strong className="text-[var(--color-text)]">1</strong> Runtime Profile</span>
               <span>·</span>
-              <span><strong className="text-[var(--color-text)]">10</strong> Tools</span>
+              <span><strong className="text-[var(--color-text)]">7</strong> Oracle Tools</span>
               <span>·</span>
               <span><strong className="text-[var(--color-text)]">4</strong> Agents</span>
               <span>·</span>
@@ -589,25 +826,27 @@ VALUES ('trend_detection_agent','reorder_flag','product',
           <div>
             <p className="text-[10px] font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">Agent Architecture</p>
             <div className="space-y-1" style={{ fontSize: 9 }}>
-              <DiagramBox label="Retail Signal Spike Detected" sub="social_posts · virality_score >= 75" color="#AA643B" />
+              <DiagramBox label="Retail Business Question" sub="Demand · fulfillment · commerce · returns" color="#AA643B" />
               <div className="text-center text-[var(--color-text-dim)]">↓</div>
-              <DiagramBox label="SOCIAL_TREND_TEAM" sub="Ollama reasoning + tool routing" color="#796087" />
-              <div className="text-center text-[var(--color-text-dim)]">↓ calls PL/SQL tool</div>
-              <DiagramBox label="detect_trending_products()" sub="Vector match · Graph centrality" color="#A36472" />
+              <DiagramBox label="Server-owned conversation context" sub="User · VPD scope · dataset generation · entities" color="#4F7D7B" />
               <div className="text-center text-[var(--color-text-dim)]">↓</div>
-              <DiagramBox label="FULFILLMENT_TEAM" sub="Inventory check · reorder logic" color="#437C94" />
+              <DiagramBox label="Deterministic Intent + Entity Router" sub="Confidence · margin · clarification · handoff" color="#796087" />
+              <div className="text-center text-[var(--color-text-dim)]">↓ selects an allowlisted tool</div>
+              <DiagramBox label="Oracle VPD-scoped read-only tool run" sub="SQL · SQL/PGQ · SDO_GEOM · AI Vector Search" color="#A36472" />
               <div className="text-center text-[var(--color-text-dim)]">↓</div>
-              <DiagramBox label="COMMERCE_TEAM" sub="Pricing · promotions · routing" color="#4C825C" />
+              <DiagramBox label="Grounded Ollama Summary" sub="Claim citations validated · deterministic fallback" color="#437C94" />
               <div className="text-center text-[var(--color-text-dim)]">↓</div>
-              <DiagramBox label="agent_actions + event_stream" sub="Audit trail · JSON events" color="#4F7D7B" />
+              <DiagramBox label="Optional Admin Proposal Cycle" sub="Explicit confirmation · append-only provenance" color="#4F7D7B" />
             </div>
             <div className="rounded-lg p-2 text-[9px] mt-2" style={{ background: 'rgba(121,96,135,0.08)', border: '1px dashed rgba(121,96,135,0.3)', color: 'var(--color-text)' }}>
               <span className="font-semibold">Why keep Oracle in the loop?</span><br/>
-              Ollama handles reasoning, but Oracle still owns the live data, SQL execution, PL/SQL tools, and durable action logging.
+              Oracle owns the live data, VPD boundary, SQL execution, Spatial and Vector Search. Ollama only phrases the bounded result.
             </div>
           </div>
         </div>
       </RegisterOraclePanel>
+
+      <RetailSceneStory scene="agents" />
 
       <div className="flex items-start justify-between">
         <div>
@@ -615,7 +854,7 @@ VALUES ('trend_detection_agent','reorder_flag','product',
             <JetGlyph iconClass="oj-fwk-icon-users" className="agent-console-page-glyph tone-plum" /> Retail AI Agent Console
           </h2>
           <p className="text-sm text-[var(--color-text-dim)] mt-1">
-            Retail AI Agent teams use <span className="font-semibold text-[var(--color-text)]">Ollama</span> for reasoning while Oracle executes SQL/PLSQL tools, enforces governed data access, and logs every AllTerrain Hiking Boots action.
+            Follow the AllTerrain investigation across governed Oracle tools, then use Ollama only to summarize the evidence those tools returned.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -634,17 +873,41 @@ VALUES ('trend_detection_agent','reorder_flag','product',
             </p>
           </div>
 
+          <JetButton
+            label={proposalRunning ? 'Creating proposals...' : 'Run governed proposal cycle'}
+            iconClass="oj-fwk-icon oj-fwk-icon-checkmark"
+            chroming="outlined"
+            disabled={proposalRunning || String(currentUser?.ROLE || '').toLowerCase() !== 'admin'}
+            onAction={runGovernedProposalCycle}
+          />
+
         </div>
       </div>
 
+      {proposalMessage && (
+        <div className="rounded-lg border border-[var(--color-border)] px-4 py-3 text-sm" role="status">
+          {proposalMessage}
+        </div>
+      )}
+
       {/* ── Chat Agent ── */}
-      <ChatAgent onActionLogged={() => { refetchActions(); }} />
+      <ChatAgent userKey={currentUser?.USERNAME} onActionLogged={() => { refetchActions(); }} />
 
       {/* Recent Actions Feed (last 3) */}
       <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <JetGlyph iconClass="oj-fwk-icon-calendar-clock" /> Recent Agent Actions
-        </h3>
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <JetGlyph iconClass="oj-fwk-icon-calendar-clock" /> Recent Agent Actions
+            </h3>
+            <p className="text-[10px] text-[var(--color-text-dim)] mt-1">
+              Durable Oracle audit rows for completed specialist questions and Admin-confirmed review proposals.
+            </p>
+          </div>
+          <span className="text-[9px] font-mono px-2 py-1 rounded-full tone-ocean" style={{ background: 'rgba(67,124,148,0.1)' }}>
+            agent_actions
+          </span>
+        </div>
         <div className="space-y-2">
           {(actions || []).slice(0, 3).map(a => {
             let payload = null;
@@ -656,17 +919,17 @@ VALUES ('trend_detection_agent','reorder_flag','product',
                 <JetGlyph iconClass={statusIcon.iconClass} className={statusIcon.className} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{a.ACTION_TYPE.replace(/_/g, ' ')}</span>
+                    <span className="text-sm font-medium">{labelFor(ACTION_TYPE_LABELS, a.ACTION_TYPE)}</span>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-medium"
                       style={{
                         background: `${AGENT_COLORS[a.AGENT_NAME] || '#6F757E'}22`,
                         color: 'var(--color-text)',
                         border: `1px solid ${AGENT_COLORS[a.AGENT_NAME] || '#6F757E'}33`,
                       }}>
-                      {a.AGENT_NAME.replace(/_/g, ' ')}
+                      {labelFor(AGENT_NAME_LABELS, a.AGENT_NAME)}
                     </span>
                     {a.ENTITY_TYPE && (
-                      <span className="text-[10px] text-[var(--color-text-dim)]">{a.ENTITY_TYPE} #{a.ENTITY_ID}</span>
+                      <span className="text-[10px] text-[var(--color-text-dim)]">{labelFor(ENTITY_TYPE_LABELS, a.ENTITY_TYPE)}{a.ENTITY_ID ? ` #${a.ENTITY_ID}` : ''}</span>
                     )}
                   </div>
                   {payload && (
@@ -683,7 +946,7 @@ VALUES ('trend_detection_agent','reorder_flag','product',
             );
           })}
           {(!actions || actions.length === 0) && (
-            <p className="text-sm text-[var(--color-text-dim)] text-center py-4">No agent actions yet. Run a cycle to get started.</p>
+            <p className="text-sm text-[var(--color-text-dim)] text-center py-4">No governed agent proposals are visible in this user's VPD scope.</p>
           )}
         </div>
       </div>

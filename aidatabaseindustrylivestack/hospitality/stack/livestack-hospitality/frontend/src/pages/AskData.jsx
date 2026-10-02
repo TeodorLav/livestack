@@ -316,7 +316,7 @@ function normalizeAskDataGuestError(error) {
   const fallbackMessages = {
     API_UNREACHABLE: 'The Governed Data Copilot API is unreachable. Check that the app backend is running.',
     OLLAMA_UNAVAILABLE: 'The local Ollama service is unavailable. Check that the Ollama container is running and that the configured model is installed.',
-    OLLAMA_MODEL_MISSING: 'The configured model is not available in the local image. Load the supplied ollama.tar before using Governed Data Copilot.',
+    OLLAMA_MODEL_MISSING: 'The selected model is not available in Ollama. Pull or configure the model before using Governed Data Copilot.',
     OLLAMA_TIMEOUT: 'The local Ollama service did not respond in time. The app used a fast governed fallback where available; try again after the model finishes warming up.',
     SQL_GENERATION_FAILED: 'Unable to generate safe SQL for that question. Try a more specific metric, time window, or entity.',
     SQL_VALIDATION_BLOCKED: BLOCKED_QUERY_COPY,

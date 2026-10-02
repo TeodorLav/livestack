@@ -10,7 +10,7 @@ import { formatNumber, formatCurrency } from '../utils/format';
 import { FeatureBadge, SqlBlock, DiagramBox } from '../components/OracleInfoPanel';
 import { JetButton, JetProgressCircle, JetSelectSingle } from '../components/JetControls';
 import { RegisterOraclePanel } from '../context/OraclePanelContext';
-import { useUser } from '../context/UserContext';
+import { RetailSceneStory } from '../components/RetailStory';
 
 // ── Color palette ──────────────────────────────────────
 const SEGMENT_COLORS = {
@@ -112,6 +112,39 @@ function ConfidenceBar({ pct }) {
   );
 }
 
+function exactEvidenceValue(value) {
+  if (value == null) return 'null';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function ExactOmlResultEvidence({ rowCount, row, fields }) {
+  if (rowCount === 0) {
+    return (
+      <p
+        className="text-xs text-[var(--color-text-dim)]"
+        data-testid="oml-business-empty-state"
+      >
+        Exact governed Oracle result: 0 rows. The API and visible result are
+        intentionally empty for this persona.
+      </p>
+    );
+  }
+  return (
+    <div
+      className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-[10px] flex flex-wrap gap-x-4 gap-y-1"
+      aria-label="Exact Oracle database and API result evidence"
+    >
+      <span className="font-semibold">Exact Oracle/API rows: {rowCount}</span>
+      {fields.map(([field, value]) => (
+        <span key={field} data-field={field}>
+          <strong>{field}:</strong> {exactEvidenceValue(value)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // Custom tooltip for forecast chart
 function ForecastTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -135,7 +168,16 @@ function ForecastTooltip({ active, payload, label }) {
 }
 
 // ── Oracle Panel content per tab ───────────────────────
-function DemandOraclePanel() {
+function OmlRegistryNote() {
+  return (
+    <p className="text-xs text-[var(--color-text-dim)] leading-relaxed">
+      The names below are logical aliases. Before scoring, the service reads <span className="font-mono">APP_OML_MODEL_REGISTRY</span> for the active dataset generation and substitutes its validated physical model name. Missing or stale registry/model evidence returns feature-unavailable; the UI does not label a heuristic fallback as OML.
+    </p>
+  );
+}
+
+function DemandOraclePanel({ provenance = [] }) {
+  const demandModel = provenance.find((model) => model.logicalName === 'DEMAND_SURGE_MODEL');
   return (
     <div className="space-y-4">
       <div>
@@ -159,33 +201,45 @@ function DemandOraclePanel() {
         <FeatureBadge label="12 Training Features" color="green" />
         <FeatureBadge label="In-DB Model Persistence" color="purple" />
       </div>
-      <SqlBlock code={`-- Read-only: score the persisted demand model against its live feature view.
-SELECT f.product_id,
-       p.product_name,
-       p.category,
-       PREDICTION(DEMAND_SURGE_MODEL USING
-         f.category AS category, f.unit_price AS unit_price,
-         f.total_posts AS total_posts, f.avg_sentiment AS avg_sentiment,
-         f.total_likes AS total_likes, f.total_shares AS total_shares,
-         f.total_views AS total_views, f.avg_virality AS avg_virality,
-         f.viral_posts AS viral_posts, f.rising_posts AS rising_posts,
-         f.units_sold AS units_sold, f.revenue AS revenue
-       ) AS predicted_surge,
-       ROUND(PREDICTION_PROBABILITY(DEMAND_SURGE_MODEL, 'SURGE' USING
-         f.category AS category, f.unit_price AS unit_price,
-         f.total_posts AS total_posts, f.avg_sentiment AS avg_sentiment,
-         f.total_likes AS total_likes, f.total_shares AS total_shares,
-         f.total_views AS total_views, f.avg_virality AS avg_virality,
-         f.viral_posts AS viral_posts, f.rising_posts AS rising_posts,
-         f.units_sold AS units_sold, f.revenue AS revenue
-       ) * 100, 1) AS surge_probability
-FROM oml_demand_training_v f
-JOIN products p ON p.product_id = f.product_id
-ORDER BY surge_probability DESC, f.product_id
-FETCH FIRST 20 ROWS ONLY;`} />
+      <OmlRegistryNote />
+      <SqlBlock code={`-- Candidate-generation training (guarded restore lifecycle)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => :physical_model_name,
+    mining_function => DBMS_DATA_MINING.CLASSIFICATION,
+    data_table_name => :generation_training_view,
+    case_id_column_name => 'PRODUCT_ID',
+    target_column_name  => 'SURGE_LABEL',
+    settings_table_name => 'OML_RF_SETTINGS'
+    -- ALGO_RANDOM_FOREST, 50 trees, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score products in real-time SQL
+SELECT p.product_name, p.category,
+
+  -- Random Forest prediction: SURGE or NORMAL
+  PREDICTION(DEMAND_SURGE_MODEL USING
+    p.category, p.unit_price,
+    eng.total_posts, eng.avg_sentiment,
+    eng.total_likes, eng.total_shares,
+    eng.total_views, eng.avg_virality,
+    eng.viral_posts, eng.rising_posts,
+    sales.units_sold, sales.revenue
+  ) AS predicted_surge,
+
+  -- Probability of SURGE class (0.0 - 1.0)
+  ROUND(PREDICTION_PROBABILITY(
+    DEMAND_SURGE_MODEL, 'SURGE' USING ...
+  ) * 100, 1) AS surge_probability
+
+FROM products p
+JOIN product_engagement eng  ...
+JOIN product_sales sales     ...
+ORDER BY surge_probability DESC;`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">DBMS_DATA_MINING Pipeline</div>
-        <DiagramBox label="OML_DEMAND_TRAINING_V (187 products)" sub="12 features: engagement + sales + social" color="#AA643B" />
+        <DiagramBox label={`Generation training rows (${formatNumber(demandModel?.trainingRowCount || 0)})`} sub={`${demandModel?.generationId || 'unavailable'} · ${demandModel?.trainingFingerprint?.slice(0, 12) || 'no fingerprint'} · 12 features`} color="#AA643B" />
         <div className="text-center text-[10px] text-[var(--color-text)]">↓ CREATE_MODEL</div>
         <DiagramBox label="DEMAND_SURGE_MODEL (Random Forest)" sub="ALGO_RANDOM_FOREST · 50 trees · PREP_AUTO" color="#C74634" />
         <div className="text-center text-[10px] text-[var(--color-text)]">↓ PREDICTION()</div>
@@ -221,30 +275,44 @@ function RFMOraclePanel() {
         <FeatureBadge label="NTILE(4) RFM Labels" color="purple" />
         <FeatureBadge label="Churn Risk Scoring" color="red" />
       </div>
-      <SqlBlock code={`-- Read-only: assign current customers to the persisted K-Means model.
-SELECT r.customer_id,
-       c.first_name || ' ' || c.last_name AS full_name,
-       r.lifetime_value, r.recency_days, r.frequency, r.monetary,
-       CLUSTER_ID(CUSTOMER_SEGMENT_MODEL USING
-         r.lifetime_value AS lifetime_value, r.recency_days AS recency_days,
-         r.frequency AS frequency, r.monetary AS monetary,
-         r.avg_order_value AS avg_order_value, r.total_items AS total_items
-       ) AS oml_cluster_id,
-       ROUND(CLUSTER_PROBABILITY(CUSTOMER_SEGMENT_MODEL USING
-         r.lifetime_value AS lifetime_value, r.recency_days AS recency_days,
-         r.frequency AS frequency, r.monetary AS monetary,
-         r.avg_order_value AS avg_order_value, r.total_items AS total_items
-       ), 3) AS cluster_probability,
-       NTILE(4) OVER (ORDER BY r.recency_days ASC) AS recency_quartile,
-       NTILE(4) OVER (ORDER BY r.frequency DESC) AS frequency_quartile,
-       NTILE(4) OVER (ORDER BY r.monetary DESC) AS monetary_quartile
-FROM oml_customer_rfm_v r
-JOIN customers c ON c.customer_id = r.customer_id
-ORDER BY r.monetary DESC, r.customer_id
-FETCH FIRST 20 ROWS ONLY;`} />
+      <OmlRegistryNote />
+      <SqlBlock code={`-- Candidate-generation training (guarded restore lifecycle)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => :physical_model_name,
+    mining_function => DBMS_DATA_MINING.CLUSTERING,
+    data_table_name => :generation_training_view,
+    case_id_column_name => 'CUSTOMER_ID',
+    settings_table_name => 'OML_CUSTOMER_KM_SETTINGS'
+    -- ALGO_KMEANS, 4 clusters, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score customers with CLUSTER_ID()
+SELECT c.first_name || ' ' || c.last_name AS full_name,
+
+  -- K-Means cluster assignment
+  CLUSTER_ID(CUSTOMER_SEGMENT_MODEL USING
+    cm.lifetime_value, cm.recency_days,
+    cm.frequency, cm.monetary,
+    cm.avg_order_value, cm.total_items
+  ) AS oml_cluster_id,
+
+  -- Cluster membership probability
+  ROUND(CLUSTER_PROBABILITY(
+    CUSTOMER_SEGMENT_MODEL USING ...
+  ), 3) AS cluster_probability,
+
+  -- RFM quartile labels layered on top
+  NTILE(4) OVER (ORDER BY recency ASC)  AS R,
+  NTILE(4) OVER (ORDER BY frequency DESC) AS F,
+  NTILE(4) OVER (ORDER BY monetary DESC)  AS M
+
+FROM customer_metrics cm
+ORDER BY total_spent DESC;`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">DBMS_DATA_MINING K-Means Pipeline</div>
-        <DiagramBox label="OML_CUSTOMER_RFM_V (2,000 customers)" sub="6 features: LTV, recency, frequency, monetary, AOV, items" color="#C74634" />
+        <DiagramBox label="Active-generation customer stage" sub="6 features: LTV, recency, frequency, monetary, AOV, items" color="#C74634" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CREATE_MODEL</div>
         <DiagramBox label="CUSTOMER_SEGMENT_MODEL (K-Means)" sub="ALGO_KMEANS · 4 clusters · PREP_AUTO" color="#796087" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CLUSTER_ID()</div>
@@ -269,7 +337,7 @@ function ForecastOraclePanel() {
           trained via <code className="text-xs tone-pine">DBMS_DATA_MINING</code> predicts per-order revenue
           from customer and product features. The time-series trend uses{' '}
           <code className="text-xs tone-pine">REGR_SLOPE / REGR_R2</code> (ISO SQL:2003) for OLS regression
-          with forward projection and widening confidence intervals.
+          with forward projection. The API derives the displayed interval band from Oracle&apos;s <span className="font-mono">STDDEV</span> result and widens it by forecast horizon; that band is application logic, not an Oracle prediction-interval function.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -278,41 +346,49 @@ function ForecastOraclePanel() {
         <FeatureBadge label="PREDICTION()" color="yellow" />
         <FeatureBadge label="REGR_SLOPE / REGR_R2" color="cyan" />
         <FeatureBadge label="7-Day Moving Average" color="cyan" />
-        <FeatureBadge label="Confidence Intervals" color="purple" />
+        <FeatureBadge label="API-derived interval band" color="purple" />
       </div>
-      <SqlBlock code={`-- Read-only: combine the persisted GLM score with the observed revenue trend.
+      <OmlRegistryNote />
+      <SqlBlock code={`-- Candidate-generation training (guarded restore lifecycle)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => :physical_model_name,
+    mining_function => DBMS_DATA_MINING.REGRESSION,
+    data_table_name => :generation_training_view,
+    case_id_column_name => 'ORDER_ID',
+    target_column_name  => 'TARGET_REVENUE',
+    settings_table_name => 'OML_REVENUE_GLM_SETTINGS'
+    -- ALGO_GENERALIZED_LINEAR_MODEL, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score orders + time-series trend
 WITH daily_rev AS (
   SELECT TRUNC(CAST(created_at AS DATE)) AS day,
-         SUM(order_total) AS revenue,
-         ROW_NUMBER() OVER (ORDER BY TRUNC(CAST(created_at AS DATE))) AS rn
+    SUM(order_total) AS revenue,
+    ROW_NUMBER() OVER (ORDER BY TRUNC(CAST(created_at AS DATE))) AS rn
   FROM orders
   WHERE created_at >= SYSDATE - 30
   GROUP BY TRUNC(CAST(created_at AS DATE))
-), params AS (
-  SELECT REGR_SLOPE(revenue, rn) AS slope,
+),
+params AS (
+  SELECT REGR_SLOPE(revenue, rn)     AS slope,
          REGR_INTERCEPT(revenue, rn) AS intercept,
-         REGR_R2(revenue, rn) AS r2
+         REGR_R2(revenue, rn)        AS r2
   FROM daily_rev
-), glm_stats AS (
-  SELECT AVG(PREDICTION(REVENUE_PREDICT_MODEL USING
-           customer_tier AS customer_tier, lifetime_value AS lifetime_value,
-           recency_days AS recency_days, frequency AS frequency,
-           monetary AS monetary, avg_order_value AS avg_order_value,
-           item_count AS item_count, total_quantity AS total_quantity,
-           avg_item_price AS avg_item_price, shipping_cost AS shipping_cost,
-           demand_score AS demand_score, social_order_flag AS social_order_flag
-         )) AS avg_predicted_revenue
-  FROM oml_revenue_training_v
+),
+-- GLM model: per-order predicted revenue
+glm_stats AS (
+  SELECT AVG(PREDICTION(REVENUE_PREDICT_MODEL USING *))
+    AS avg_predicted
+  FROM OML_REVENUE_TRAINING_V
 )
-SELECT d.day, d.revenue, p.slope * d.rn + p.intercept AS trend,
-       p.r2, g.avg_predicted_revenue
-FROM daily_rev d
-CROSS JOIN params p
-CROSS JOIN glm_stats g
-ORDER BY d.day;`} />
+SELECT day, revenue, slope * rn + intercept AS trend,
+  r2, avg_predicted
+FROM daily_rev CROSS JOIN params CROSS JOIN glm_stats;`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">Dual Model Pipeline</div>
-        <DiagramBox label="OML_REVENUE_TRAINING_V (3,000 orders)" sub="features: tier, LTV, demand_score, items, avg_price" color="#4C825C" />
+        <DiagramBox label="Active-generation revenue stage" sub="features: tier, LTV, demand score, items, average price" color="#4C825C" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CREATE_MODEL</div>
         <DiagramBox label="REVENUE_PREDICT_MODEL (GLM)" sub="ALGO_GENERALIZED_LINEAR_MODEL · PREP_AUTO" color="#C74634" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ PREDICTION()</div>
@@ -324,7 +400,8 @@ ORDER BY d.day;`} />
   );
 }
 
-function ClustersOraclePanel() {
+function ClustersOraclePanel({ provenance = [] }) {
+  const productModel = provenance.find((model) => model.logicalName === 'PRODUCT_CLUSTER_MODEL');
   return (
     <div className="space-y-4">
       <div>
@@ -347,30 +424,48 @@ function ClustersOraclePanel() {
         <FeatureBadge label="CLUSTER_ID()" color="purple" />
         <FeatureBadge label="CLUSTER_PROBABILITY()" color="purple" />
         <FeatureBadge label="8 Behavioral Features" color="green" />
-        <FeatureBadge label="ONNX Embeddings Available" color="orange" />
         <FeatureBadge label="In-DB Model Persistence" color="yellow" />
       </div>
-      <SqlBlock code={`-- Read-only: score product behaviour with the persisted K-Means model.
-SELECT f.product_id, p.product_name, p.category, p.unit_price,
-       CLUSTER_ID(PRODUCT_CLUSTER_MODEL USING
-         f.unit_price AS unit_price, f.weight_kg AS weight_kg,
-         f.units_sold AS units_sold, f.revenue AS revenue,
-         f.order_count AS order_count, f.total_engagement AS total_engagement,
-         f.avg_sentiment AS avg_sentiment, f.avg_virality AS avg_virality
-       ) AS cluster_id,
-       ROUND(CLUSTER_PROBABILITY(PRODUCT_CLUSTER_MODEL USING
-         f.unit_price AS unit_price, f.weight_kg AS weight_kg,
-         f.units_sold AS units_sold, f.revenue AS revenue,
-         f.order_count AS order_count, f.total_engagement AS total_engagement,
-         f.avg_sentiment AS avg_sentiment, f.avg_virality AS avg_virality
-       ), 4) AS cluster_probability
-FROM oml_product_cluster_v f
-JOIN products p ON p.product_id = f.product_id
-ORDER BY cluster_id, cluster_probability DESC, f.product_id
-FETCH FIRST 20 ROWS ONLY;`} />
+      <OmlRegistryNote />
+      <SqlBlock code={`-- Candidate-generation training (guarded restore lifecycle)
+BEGIN
+  DBMS_DATA_MINING.CREATE_MODEL(
+    model_name      => :physical_model_name,
+    mining_function => DBMS_DATA_MINING.CLUSTERING,
+    data_table_name => :generation_training_view,
+    case_id_column_name => 'PRODUCT_ID',
+    settings_table_name => 'OML_PRODUCT_KM_SETTINGS'
+    -- ALGO_KMEANS, 5 clusters, PREP_AUTO_ON
+  );
+END;
+
+-- Step 2: Score products with CLUSTER_ID()
+SELECT p.product_name, p.category, p.unit_price,
+
+  -- K-Means cluster assignment
+  CLUSTER_ID(PRODUCT_CLUSTER_MODEL USING
+    pcv.unit_price, pcv.weight_kg,
+    pcv.units_sold, pcv.revenue,
+    pcv.order_count, pcv.total_engagement,
+    pcv.avg_sentiment, pcv.avg_virality
+  ) AS cluster_id,
+
+  -- Membership probability (0.0 - 1.0)
+  ROUND(CLUSTER_PROBABILITY(
+    PRODUCT_CLUSTER_MODEL USING *
+  ), 4) AS cluster_prob
+
+FROM OML_PRODUCT_CLUSTER_V pcv
+JOIN products p ON pcv.PRODUCT_ID = p.PRODUCT_ID
+ORDER BY cluster_id, cluster_prob DESC;
+
+-- Training view features:
+-- unit_price, weight_kg, units_sold, revenue,
+-- order_count, total_engagement, avg_sentiment,
+-- avg_virality`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">DBMS_DATA_MINING K-Means Pipeline</div>
-        <DiagramBox label="OML_PRODUCT_CLUSTER_V (187 products)" sub="8 features: price, sales, engagement, sentiment" color="#4F7D7B" />
+        <DiagramBox label={`Generation training rows (${formatNumber(productModel?.trainingRowCount || 0)})`} sub={`${productModel?.generationId || 'unavailable'} · ${productModel?.trainingFingerprint?.slice(0, 12) || 'no fingerprint'} · 8 features`} color="#4F7D7B" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CREATE_MODEL</div>
         <DiagramBox label="PRODUCT_CLUSTER_MODEL (K-Means)" sub="ALGO_KMEANS · 5 clusters · PREP_AUTO · convergence" color="#AA643B" />
         <div className="text-center text-[10px] text-[var(--color-text-dim)]">↓ CLUSTER_ID()</div>
@@ -405,60 +500,56 @@ function InventoryOraclePanel() {
         <FeatureBadge label="Revenue at Risk" color="red" />
         <FeatureBadge label="Days of Supply" color="green" />
       </div>
-      <SqlBlock code={`-- Read-only: join current demand-model scores to live inventory.
-WITH product_scores AS (
-  SELECT f.product_id,
-         PREDICTION(DEMAND_SURGE_MODEL USING
-           f.category AS category, f.unit_price AS unit_price,
-           f.total_posts AS total_posts, f.avg_sentiment AS avg_sentiment,
-           f.total_likes AS total_likes, f.total_shares AS total_shares,
-           f.total_views AS total_views, f.avg_virality AS avg_virality,
-           f.viral_posts AS viral_posts, f.rising_posts AS rising_posts,
-           f.units_sold AS units_sold, f.revenue AS revenue
-         ) AS oml_surge_prediction,
-         ROUND(PREDICTION_PROBABILITY(DEMAND_SURGE_MODEL, 'SURGE' USING
-           f.category AS category, f.unit_price AS unit_price,
-           f.total_posts AS total_posts, f.avg_sentiment AS avg_sentiment,
-           f.total_likes AS total_likes, f.total_shares AS total_shares,
-           f.total_views AS total_views, f.avg_virality AS avg_virality,
-           f.viral_posts AS viral_posts, f.rising_posts AS rising_posts,
-           f.units_sold AS units_sold, f.revenue AS revenue
-         ) * 100, 1) AS surge_probability
-  FROM oml_demand_training_v f
-), latest_available_forecast AS (
-  SELECT product_id, predicted_demand, social_factor
+      <OmlRegistryNote />
+      <SqlBlock code={`-- OML Inventory Intelligence execution shape (abridged)
+-- The endpoint executes the full CTE in backend/routes/ml.js.
+WITH latest_available_forecast AS (
+  SELECT *
   FROM (
     SELECT df.*,
-           ROW_NUMBER() OVER (PARTITION BY df.product_id ORDER BY df.forecast_date DESC) AS forecast_rank
+           ROW_NUMBER() OVER (
+             PARTITION BY df.product_id
+             ORDER BY
+               CASE WHEN df.forecast_date >= TRUNC(SYSDATE) THEN 0 ELSE 1 END,
+               CASE WHEN df.forecast_date >= TRUNC(SYSDATE) THEN df.forecast_date END ASC NULLS LAST,
+               df.forecast_date DESC
+           ) AS forecast_rank
     FROM demand_forecasts df
   )
   WHERE forecast_rank = 1
 )
 SELECT p.product_name, fc.center_name,
-       i.quantity_on_hand, i.reorder_point,
-       NVL(df.predicted_demand, 0) AS predicted_demand,
-       ps.oml_surge_prediction, ps.surge_probability,
-       CASE
-         WHEN i.quantity_on_hand = 0 THEN 'OUT_OF_STOCK'
-         WHEN i.quantity_on_hand < i.reorder_point * 0.5 THEN 'CRITICAL'
-         WHEN i.quantity_on_hand < NVL(df.predicted_demand, i.reorder_point) THEN 'AT_RISK'
-         WHEN i.quantity_on_hand < i.reorder_point THEN 'LOW'
-         ELSE 'ADEQUATE'
-       END AS stock_status,
-       CASE WHEN NVL(df.predicted_demand, 0) > 0
-         THEN ROUND(i.quantity_on_hand / (df.predicted_demand / 7), 1)
-       END AS days_of_supply,
-       CASE WHEN i.quantity_on_hand < NVL(df.predicted_demand, 0)
-         THEN ROUND((df.predicted_demand - i.quantity_on_hand) * p.unit_price, 2)
-         ELSE 0
-       END AS revenue_at_risk
+  i.quantity_on_hand, i.reorder_point,
+  df.predicted_demand, df.social_factor,
+
+  -- Real-time OML scoring
+  PREDICTION(DEMAND_SURGE_MODEL USING
+    p.category, p.unit_price,
+    eng.total_posts, eng.avg_sentiment, ...
+  ) AS oml_surge_prediction,
+
+  ROUND(PREDICTION_PROBABILITY(
+    DEMAND_SURGE_MODEL, 'SURGE' USING ...
+  ) * 100, 1) AS oml_surge_probability,
+
+  -- Supply risk metrics
+  CASE WHEN qty = 0 THEN 'OUT_OF_STOCK'
+       WHEN qty < reorder * 0.5 THEN 'CRITICAL'
+       WHEN qty < predicted_demand THEN 'AT_RISK'
+  END AS stock_status,
+
+  -- Days of supply at predicted consumption rate
+  ROUND(qty / (predicted_demand / 7), 1)
+    AS days_of_supply,
+
+  -- Revenue at risk from stockout
+  (predicted_demand - qty) * unit_price
+    AS revenue_at_risk
+
 FROM inventory i
-JOIN products p ON p.product_id = i.product_id
-JOIN fulfillment_centers fc ON fc.center_id = i.center_id
-JOIN product_scores ps ON ps.product_id = i.product_id
-LEFT JOIN latest_available_forecast df ON df.product_id = i.product_id
-ORDER BY ps.surge_probability DESC, revenue_at_risk DESC
-FETCH FIRST 20 ROWS ONLY;`} />
+LEFT JOIN latest_available_forecast df
+  ON df.product_id = i.product_id
+ORDER BY oml_surge_probability DESC;`} />
       <div className="oml-model-flow">
         <div className="text-[9px] text-center text-[var(--color-text)] font-bold mb-1">Inventory Intelligence Pipeline</div>
         <DiagramBox label="DEMAND_SURGE_MODEL (Random Forest)" sub="PREDICTION_PROBABILITY('SURGE') per product" color="#796087" />
@@ -475,24 +566,36 @@ FETCH FIRST 20 ROWS ONLY;`} />
 
 // ── Main page ──────────────────────────────────────────
 export default function OMLAnalytics() {
-  const { currentUser } = useUser();
   const [activeTab, setActiveTab]       = useState('demand');
   const [demandHours, setDemandHours]   = useState(720);
   const [forecastDays, setForecastDays] = useState(7);
   const [selectedSegment, setSelectedSegment] = useState(null);
   const [clusterK, setClusterK]         = useState(5);
-  const userKey = currentUser?.USERNAME;
 
-  const { data: summary, loading: summaryLoading } = useData(() => api.ml.summary(), [userKey]);
-  const { data: demandData, loading: demandLoading, refetch: refetchDemand } =
-    useData(() => api.ml.demandForecast({ hours: demandHours }), [demandHours, userKey]);
-  const { data: segData, loading: segLoading } = useData(() => api.ml.customerSegments(), [userKey]);
-  const { data: forecastData, loading: forecastLoading, refetch: refetchForecast } =
-    useData(() => api.ml.revenueForecast({ days: 30, forecast: forecastDays }), [forecastDays, userKey]);
-  const { data: clusterData, loading: clusterLoading, refetch: refetchClusters } =
-    useData(() => api.ml.vectorClusters(clusterK), [clusterK, userKey]);
-  const { data: invData, loading: invLoading, refetch: refetchInv } =
-    useData(() => api.ml.inventoryIntelligence(), [userKey]);
+  const { data: summary, loading: summaryLoading, error: summaryError } = useData(() => api.ml.summary());
+  const { data: demandData, loading: demandLoading, error: demandError, refetch: refetchDemand } =
+    useData(() => api.ml.demandForecast({ hours: demandHours }), [demandHours]);
+  const { data: segData, loading: segLoading, error: segmentError } = useData(() => api.ml.customerSegments());
+  const { data: forecastData, loading: forecastLoading, error: forecastError, refetch: refetchForecast } =
+    useData(() => api.ml.revenueForecast({ days: 30, forecast: forecastDays }), [forecastDays]);
+  const { data: clusterData, loading: clusterLoading, error: clusterError, refetch: refetchClusters } =
+    useData(() => api.ml.vectorClusters(clusterK), [clusterK]);
+  const { data: invData, loading: invLoading, error: inventoryError, refetch: refetchInv } =
+    useData(() => api.ml.inventoryIntelligence());
+  const activeFeatureError = {
+    demand: demandError,
+    rfm: segmentError,
+    forecast: forecastError,
+    clusters: clusterError,
+    inventory: inventoryError,
+  }[activeTab];
+  const omlUnavailableError = summaryError
+    || demandError
+    || segmentError
+    || forecastError
+    || clusterError
+    || inventoryError;
+  const omlUnavailable = Boolean(omlUnavailableError);
 
   const products   = demandData?.products  || [];
   const customers  = segData?.customers    || [];
@@ -545,10 +648,8 @@ export default function OMLAnalytics() {
   const filteredCustomers = selectedSegment
     ? customers.filter(c => c.SEGMENT === selectedSegment)
     : customers;
-
   return (
     <div className="space-y-6 fade-in">
-
       {/* ── Header ──────────────────────────────── */}
       <div>
         <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -561,12 +662,33 @@ export default function OMLAnalytics() {
         </p>
       </div>
 
+      <RetailSceneStory scene="oml" />
+
+      {omlUnavailable ? (
+        <section
+          className="glass-card p-4 border border-[var(--color-danger)]"
+          data-testid="oml-feature-unavailable"
+          role="alert"
+          aria-label="Oracle Machine Learning unavailable"
+        >
+          <p className="section-kicker">Oracle Machine Learning unavailable</p>
+          <p className="mt-2 text-sm">
+            {omlUnavailableError?.message || activeFeatureError?.message}.
+            {' '}No heuristic prediction has been substituted; no cached,
+            partial, or empty-normal result remains visible.
+          </p>
+        </section>
+      ) : (
+        <div
+          className="contents"
+          data-testid="oml-affirmative-results"
+        >
       {/* ── Oracle Panel - switches content based on active tab ── */}
       <RegisterOraclePanel title="Retail OML Analytics">
-        {activeTab === 'demand'   && <DemandOraclePanel />}
+        {activeTab === 'demand'   && <DemandOraclePanel provenance={summary?.model_provenance || []} />}
         {activeTab === 'rfm'      && <RFMOraclePanel />}
         {activeTab === 'forecast' && <ForecastOraclePanel />}
-        {activeTab === 'clusters' && <ClustersOraclePanel />}
+        {activeTab === 'clusters' && <ClustersOraclePanel provenance={summary?.model_provenance || []} />}
         {activeTab === 'inventory' && <InventoryOraclePanel />}
       </RegisterOraclePanel>
 
@@ -666,6 +788,24 @@ export default function OMLAnalytics() {
               />
             </div>
           </div>
+
+          {!demandLoading && (
+            <div
+              data-testid="oml-business-result-demand"
+              data-row-count={products.length}
+            >
+              <ExactOmlResultEvidence
+                rowCount={products.length}
+                row={products[0]}
+                fields={[
+                  ['PRODUCT_ID', products[0]?.PRODUCT_ID],
+                  ['PREDICTED_SURGE', products[0]?.PREDICTED_SURGE],
+                  ['SURGE_PROBABILITY', products[0]?.SURGE_PROBABILITY],
+                  ['PREDICTED_DEMAND', products[0]?.PREDICTED_DEMAND],
+                ]}
+              />
+            </div>
+          )}
 
           {demandLoading ? (
             <p className="text-sm text-[var(--color-text-dim)] py-4 text-center">Scoring via PREDICTION(DEMAND_SURGE_MODEL)...</p>
@@ -776,6 +916,24 @@ export default function OMLAnalytics() {
               <code className="tone-plum">NTILE(4)</code> RFM labeling - CLUSTER_ID() scoring. Segment customers based on purchasing behavior, loyalty, recency, and engagement to improve retention and personalized marketing.
             </p>
           </div>
+
+          {!segLoading && (
+            <div
+              data-testid="oml-business-result-rfm"
+              data-row-count={customers.length}
+            >
+              <ExactOmlResultEvidence
+                rowCount={customers.length}
+                row={customers[0]}
+                fields={[
+                  ['CUSTOMER_ID', customers[0]?.CUSTOMER_ID],
+                  ['OML_CLUSTER_ID', customers[0]?.OML_CLUSTER_ID],
+                  ['CLUSTER_PROBABILITY', customers[0]?.CLUSTER_PROBABILITY],
+                  ['SEGMENT', customers[0]?.SEGMENT],
+                ]}
+              />
+            </div>
+          )}
 
           {segLoading ? (
             <p className="text-sm text-[var(--color-text-dim)] py-4 text-center">Scoring customers via CLUSTER_ID(CUSTOMER_SEGMENT_MODEL)...</p>
@@ -958,6 +1116,24 @@ export default function OMLAnalytics() {
             </div>
           </div>
 
+          {!forecastLoading && (
+            <div
+              data-testid="oml-business-result-forecast"
+              data-row-count={historical.length}
+            >
+              <ExactOmlResultEvidence
+                rowCount={historical.length}
+                row={historical[0]}
+                fields={[
+                  ['DAY', historical[0]?.DAY],
+                  ['ACTUAL_REVENUE', historical[0]?.ACTUAL_REVENUE],
+                  ['AVG_GLM_PREDICTED', historical[0]?.AVG_GLM_PREDICTED],
+                  ['R_SQUARED', historical[0]?.R_SQUARED],
+                ]}
+              />
+            </div>
+          )}
+
           {forecastLoading ? (
             <p className="text-sm text-[var(--color-text-dim)] py-4 text-center">Fitting REGR_SLOPE model...</p>
           ) : (
@@ -1087,6 +1263,24 @@ export default function OMLAnalytics() {
               />
             </div>
           </div>
+
+          {!clusterLoading && (
+            <div
+              data-testid="oml-business-result-clusters"
+              data-row-count={clusterData?.total_products || 0}
+            >
+              <ExactOmlResultEvidence
+                rowCount={clusterData?.total_products || 0}
+                row={clusterData?.clusters?.[0]?.products?.[0]}
+                fields={[
+                  ['CLUSTER_ID', clusterData?.clusters?.[0]?.cluster_id],
+                  ['PRODUCT_ID', clusterData?.clusters?.[0]?.products?.[0]?.product_id],
+                  ['SIMILARITY', clusterData?.clusters?.[0]?.products?.[0]?.similarity],
+                  ['SEED_NAME', clusterData?.clusters?.[0]?.centroid_product],
+                ]}
+              />
+            </div>
+          )}
 
           {clusterLoading ? (
             <div className="py-8 text-center">
@@ -1248,6 +1442,26 @@ export default function OMLAnalytics() {
               onAction={refetchInv}
             />
           </div>
+
+          {!invLoading && (
+            <div
+              data-testid="oml-business-result-inventory"
+              data-row-count={invData?.alerts?.length || 0}
+            >
+              <ExactOmlResultEvidence
+                rowCount={invData?.alerts?.length || 0}
+                row={invData?.alerts?.[0]}
+                fields={[
+                  ['PRODUCT_ID', invData?.alerts?.[0]?.PRODUCT_ID],
+                  ['CENTER_ID', invData?.alerts?.[0]?.CENTER_ID],
+                  ['OML_SURGE_PREDICTION', invData?.alerts?.[0]?.OML_SURGE_PREDICTION],
+                  ['OML_SURGE_PROBABILITY', invData?.alerts?.[0]?.OML_SURGE_PROBABILITY],
+                  ['STOCK_STATUS', invData?.alerts?.[0]?.STOCK_STATUS],
+                  ['REVENUE_AT_RISK', invData?.alerts?.[0]?.REVENUE_AT_RISK],
+                ]}
+              />
+            </div>
+          )}
 
           {invLoading ? (
             <p className="text-sm text-[var(--color-text-dim)] py-4 text-center">Scoring inventory via PREDICTION(DEMAND_SURGE_MODEL)...</p>
@@ -1448,6 +1662,8 @@ export default function OMLAnalytics() {
             </>
           )}
         </section>
+      )}
+        </div>
       )}
     </div>
   );

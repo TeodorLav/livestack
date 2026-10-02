@@ -1,6 +1,7 @@
 volumes:
   oracle-data:
   ords-config:
+  ollama-models:
 
 services:
   db:
@@ -29,7 +30,7 @@ services:
 
   ords:
     hostname: ords
-    image: ${ORDS_IMAGE:-container-registry.oracle.com/database/ords:26.2.3}
+    image: ${ORDS_IMAGE:-container-registry.oracle.com/database/ords:latest}
     environment:
       CONN_STRING: ${CONN_STRING:-db:1521/FREEPDB1}
       DBHOST: ${DBHOST:-db}
@@ -57,16 +58,16 @@ services:
 
   ollama:
     hostname: ollama
-    # Before starting Compose, load the local image with: podman load -i /tmp/ollama.tar
-    image: localhost/ollama:local
-    pull_policy: never
-    entrypoint: ["/bin/ollama"]
-    command: ["serve"]
+    image: ${OLLAMA_IMAGE:-docker.io/ollama/ollama:latest}
     environment:
       OLLAMA_HOST: ${OLLAMA_HOST:-0.0.0.0:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+    entrypoint: ["/bin/bash", "/pull_ollama.sh"]
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+      - ./scripts/pull_ollama.sh:/pull_ollama.sh:ro,z
     healthcheck:
       test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama show \"$${OLLAMA_MODEL:-llama3.2}\" >/dev/null 2>&1"]
       interval: 10s
@@ -101,7 +102,11 @@ services:
     ports:
       - "${APP_PORT:-8505}:3001"
     depends_on:
+      db:
+        condition: service_healthy
       ords:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     healthcheck:
       test:
