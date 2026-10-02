@@ -514,16 +514,18 @@ export default function SocialFeed() {
           <SqlBlock code={`-- Real-time vector semantic search for public services
 -- Embeds user query at runtime, then finds nearest
 -- service vectors via ANN index (cosine distance)
-SELECT service_id, service_name, service_category,
-       estimated_service_value, agency_or_program,
+SELECT ps.service_id, ps.service_name, ps.service_category,
+       ps.service_value_proxy, ps.program_name,
        ROUND(1 - VECTOR_DISTANCE(
-         service_vector,
+         pe.embedding,
          VECTOR_EMBEDDING(ALL_MINILM_L12_V2
                           USING :query AS DATA),
          COSINE), 4)             AS similarity_score
-FROM   state_local_government_service_vectors
+FROM   product_embeddings pe
+JOIN   sled_public_services_v ps
+       ON ps.service_id = pe.product_id
 ORDER  BY VECTOR_DISTANCE(
-  service_vector,
+  pe.embedding,
   VECTOR_EMBEDDING(ALL_MINILM_L12_V2
                    USING :query AS DATA),
   COSINE)

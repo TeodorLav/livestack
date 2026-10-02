@@ -728,29 +728,36 @@ export default function Dashboard() {
 -- Government-facing query surfaces keep demo SQL agency-focused.
 SELECT
   (SELECT COUNT(*)
-     FROM state_local_government_service_requests) AS service_requests_total,
+     FROM sled_service_requests_v) AS service_requests_total,
   (SELECT NVL(SUM(service_value_exposure), 0)
-     FROM state_local_government_service_requests) AS service_value_exposure,
+     FROM sled_service_requests_v) AS service_value_exposure,
   (SELECT COUNT(*)
-     FROM resident_service_signals
+     FROM sled_resident_signals_v
     WHERE urgency_score >= 80) AS critical_service_signals,
   (SELECT COUNT(*)
-     FROM public_service_agent_actions) AS agent_actions,
+     FROM agent_actions) AS agent_actions,
   (SELECT COUNT(*)
-     FROM service_task_routes
-    WHERE route_status = 'active') AS active_service_routes
+     FROM sled_service_task_routes_v
+    WHERE route_status = 'active route') AS active_service_routes
 FROM dual;`} />
           <SqlBlock code={`-- Service and program search: Oracle UPPER() case-insensitive LIKE
-SELECT service_name,
-       agency_or_program_name,
-       COUNT(DISTINCT signal_id) AS signal_count,
-       ROUND(AVG(urgency_score), 2) AS avg_priority
-FROM resident_service_signals_v
-WHERE signal_timestamp >= SYSTIMESTAMP - INTERVAL '7' DAY
-  AND (UPPER(service_name)           LIKE UPPER(:search)
-    OR UPPER(agency_or_program_name) LIKE UPPER(:search)
-    OR UPPER(signal_text)            LIKE UPPER(:search))
-GROUP BY service_id, service_name, agency_or_program_name
+SELECT ps.service_name,
+       ps.program_name,
+       COUNT(DISTINCT rs.resident_signal_id) AS signal_count,
+       ROUND(AVG(rs.urgency_score), 2) AS avg_priority
+FROM sled_resident_signals_v rs
+JOIN post_product_mentions ppm
+  ON ppm.post_id = rs.resident_signal_id
+JOIN sled_public_services_v ps
+  ON ps.service_id = ppm.product_id
+WHERE rs.signal_time >= (
+        SELECT MAX(signal_time)
+        FROM sled_resident_signals_v
+      ) - INTERVAL '7' DAY
+  AND (UPPER(ps.service_name) LIKE UPPER(:search)
+    OR UPPER(ps.program_name) LIKE UPPER(:search)
+    OR UPPER(rs.signal_text) LIKE UPPER(:search))
+GROUP BY ps.service_id, ps.service_name, ps.program_name
 ORDER BY avg_priority DESC;`} />
           <div>
             <p className="text-[10px] font-semibold text-[var(--color-text-dim)] uppercase tracking-wider mb-2">Converged Architecture</p>

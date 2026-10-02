@@ -12,7 +12,7 @@ const MODES = [
     label: 'Narrate',
     iconClass: 'oj-fwk-icon-message-info',
     color: '#4F7D7B',
-    desc: 'Natural-language answer',
+    desc: 'Plain-English answer',
     tooltip: 'Generate SQL, run it, and narrate the results in public-sector language.',
   },
   {
@@ -588,7 +588,7 @@ SELECT service_request_id,
        request_status,
        urgency_score,
        service_value_exposure
-FROM governed_service_requests_view
+FROM sled_service_requests_v
 WHERE resident_signal_id IS NOT NULL
   AND LOWER(request_status) NOT IN ('completed', 'routed', 'reopened')
 ORDER BY urgency_score DESC
@@ -616,7 +616,7 @@ FETCH FIRST 5 ROWS ONLY;`} />
           <JetGlyph iconClass="oj-fwk-icon-message-info" className="askdata-page-glyph tone-teal" /> Ask State and Local Government Data
         </h2>
         <p className="text-sm text-[var(--color-text-dim)] mt-1">
-          Ask natural-language questions about constituent services, permits and licensing, benefits eligibility, inspections, public works, transportation, emergency response, policy compliance, capacity, backlog, and auditability.
+          Ask plain-English questions about constituent services, permits and licensing, benefits eligibility, inspections, public works, transportation, emergency response, policy compliance, capacity, backlog, and auditability.
         </p>
       </div>
 

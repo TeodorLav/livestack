@@ -1,14 +1,11 @@
-name: livestack-media
-
 volumes:
   oracle-data:
   ords-config:
-  ollama-models:
 
 services:
   db:
     hostname: db
-    image: ${ORACLE_DB_IMAGE:-container-registry.oracle.com/database/free:latest}
+    image: ${ORACLE_DB_IMAGE:-container-registry.oracle.com/database/free:23.26.1.0}
     environment:
       ORACLE_PWD: ${ORACLE_PWD:-oracle}
       ORACLE_CHARACTERSET: ${ORACLE_CHARACTERSET:-AL32UTF8}
@@ -32,7 +29,7 @@ services:
 
   ords:
     hostname: ords
-    image: ${ORDS_IMAGE:-container-registry.oracle.com/database/ords:latest}
+    image: ${ORDS_IMAGE:-container-registry.oracle.com/database/ords:26.2.3}
     environment:
       CONN_STRING: ${CONN_STRING:-db:1521/FREEPDB1}
       DBHOST: ${DBHOST:-db}
@@ -60,16 +57,16 @@ services:
 
   ollama:
     hostname: ollama
-    image: ${OLLAMA_IMAGE:-docker.io/ollama/ollama:latest}
+    # Before starting Compose, load the local image with: podman load -i /tmp/ollama.tar
+    image: localhost/ollama:local
+    pull_policy: never
+    entrypoint: ["/bin/ollama"]
+    command: ["serve"]
     environment:
       OLLAMA_HOST: ${OLLAMA_HOST:-0.0.0.0:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
-    entrypoint: ["/bin/bash", "/pull_ollama.sh"]
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-      - ./scripts/pull_ollama.sh:/pull_ollama.sh:ro,z
     healthcheck:
       test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama show \"$${OLLAMA_MODEL:-llama3.2}\" >/dev/null 2>&1"]
       interval: 10s
@@ -92,7 +89,7 @@ services:
       APP_SCHEMA_PASSWORD: ${APP_SCHEMA_PASSWORD:-livestackrulez!}
       ORACLE_CONNECTION_STRING: ${ORACLE_CONNECTION_STRING:-db:1521/FREEPDB1}
       ORACLE_POOL_MIN: ${ORACLE_POOL_MIN:-2}
-      ORACLE_POOL_MAX: ${ORACLE_POOL_MAX:-20}
+      ORACLE_POOL_MAX: ${ORACLE_POOL_MAX:-10}
       ORACLE_POOL_INCREMENT: ${ORACLE_POOL_INCREMENT:-1}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
@@ -104,11 +101,7 @@ services:
     ports:
       - "${APP_PORT:-8505}:3001"
     depends_on:
-      db:
-        condition: service_healthy
       ords:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     healthcheck:
       test:

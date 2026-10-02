@@ -15,7 +15,7 @@ $ sqlplus / as sysdba;
 
 SQL> alter session set container=ORCLPDB;
 
-3. Apply grants and define the data dump directory as the path where the ONNX model was unzipped. 
+3. Apply grants and define the data dump directory as the path where the ONNX model was unzipped.
 
 Note, in this example, we are using the OMLUSER schema. Replace OMLUSER with your schema name.
 
@@ -64,7 +64,7 @@ E-002,-8.92989617E-003,-5.55456802E-002,5.72643466E-002,3.43147628E-002,-3.51916
 ...
 
 
-7. An Alternate method to import ONNX Models is to use the DBMS_DATA_MINING.IMPORT_ONNX_MODEL procedure. 
+7. An Alternate method to import ONNX Models is to use the DBMS_DATA_MINING.IMPORT_ONNX_MODEL procedure.
 
 This example sets up a BLOB object and a BFILE locator, creates a temporary BLOB for storing the ONNX file from the DM_DUMP directory, and reads its contents into the BLOB. It then closes the file and uses the content to import an ONNX model into the database with specified metadata, before releasing the temporary BLOB resources.
 
@@ -79,8 +79,8 @@ DECLARE
     DBMS_LOB.fileopen (m_src_loc, DBMS_LOB.file_readonly);
     DBMS_LOB.loadfromfile (m_blob, m_src_loc, DBMS_LOB.getlength (m_src_loc));
     DBMS_LOB.CLOSE(m_src_loc);
-    DBMS_DATA_MINING.import_onnx_model ('ALL_MINILM_L12_V2', 
-                                        m_blob, 
+    DBMS_DATA_MINING.import_onnx_model ('ALL_MINILM_L12_V2',
+                                        m_blob,
                                         JSON('{"function":"embedding", "embeddingOutput":"embedding", "input":{"input": ["DATA"]}}'));
     DBMS_LOB.freetemporary (m_blob);
     END;

@@ -10,7 +10,8 @@ function boundedInteger(value, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
-const FINANCIAL_MODEL = process.env.OLLAMA_FINANCIAL_MODEL || 'llama3.2:1b';
+// Owner validation shares the model bundled in ollama.tar with the governed-data assistant.
+const FINANCIAL_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
 const FINANCIAL_TIMEOUT_MS = boundedInteger(process.env.FINANCIAL_AI_TIMEOUT_MS, 15000, 3000, 120000);
 const FINANCIAL_NUM_PREDICT = boundedInteger(process.env.FINANCIAL_AI_NUM_PREDICT, 8, 6, 64);
 const FINANCIAL_NUM_CTX = boundedInteger(process.env.FINANCIAL_AI_NUM_CTX, 512, 512, 2048);

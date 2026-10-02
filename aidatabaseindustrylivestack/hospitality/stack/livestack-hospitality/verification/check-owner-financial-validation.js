@@ -65,11 +65,12 @@ const checks = [
   {
     file: 'backend/lib/financialAiWorker.js',
     terms: [
-      'llama3.2:1b', 'FINANCIAL_AI_TIMEOUT_MS', '15000',
+      "process.env.OLLAMA_MODEL || 'llama3.2'", 'FINANCIAL_AI_TIMEOUT_MS', '15000',
       'claim_financial_ai_job', 'complete_financial_ai_job',
       'fail_financial_ai_job', 'recover_stale_financial_ai_jobs',
       'keepAlive', 'concurrency: 1',
     ],
+    absentTerms: ['OLLAMA_FINANCIAL_MODEL', 'llama3.2:1b'],
   },
   {
     file: 'backend/lib/ollamaAssistant.js',
@@ -81,11 +82,13 @@ const checks = [
   },
   {
     file: 'compose.yml',
-    terms: ['OLLAMA_FINANCIAL_MODEL', 'llama3.2:1b', 'FINANCIAL_AI_TIMEOUT_MS', '15000', 'OLLAMA_NUM_PARALLEL'],
+    terms: ['localhost/ollama:local', 'pull_policy: never', 'entrypoint: ["/bin/ollama"]', 'command: serve', 'OLLAMA_MODEL', 'FINANCIAL_AI_TIMEOUT_MS', '15000', 'OLLAMA_NUM_PARALLEL'],
+    absentTerms: ['OLLAMA_FINANCIAL_MODEL', 'llama3.2:1b', 'pull_ollama.sh', 'ollama-models'],
   },
   {
-    file: 'scripts/pull_ollama.sh',
-    terms: ['OLLAMA_FINANCIAL_MODEL', 'llama3.2:1b', 'Prewarming finance model', 'ollama-financial-ready'],
+    file: '.env.example',
+    terms: ['ORACLE_DB_IMAGE=container-registry.oracle.com/database/free:23.26.1.0', 'ORDS_IMAGE=container-registry.oracle.com/database/ords:26.2.3', 'OLLAMA_IMAGE=localhost/ollama:local', 'OLLAMA_MODEL=llama3.2'],
+    absentTerms: ['OLLAMA_FINANCIAL_MODEL', 'llama3.2:1b'],
   },
   {
     file: 'scripts/bootstrap_db.sh',

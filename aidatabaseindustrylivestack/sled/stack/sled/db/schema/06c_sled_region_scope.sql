@@ -128,10 +128,11 @@ WHEN NOT MATCHED THEN INSERT (
 DECLARE
     v_nullable user_tab_columns.nullable%TYPE;
 BEGIN
-    SELECT nullable INTO v_nullable
-    FROM user_tab_columns
-    WHERE table_name = 'APP_USERS'
-      AND column_name = 'ACCESS_SCOPE';
+    SELECT nullable
+      INTO v_nullable
+      FROM user_tab_columns
+     WHERE table_name = 'APP_USERS'
+       AND column_name = 'ACCESS_SCOPE';
 
     IF v_nullable = 'Y' THEN
         EXECUTE IMMEDIATE 'ALTER TABLE app_users MODIFY (access_scope NOT NULL)';

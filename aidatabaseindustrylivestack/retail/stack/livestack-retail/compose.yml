@@ -1,12 +1,11 @@
 volumes:
   oracle-data:
   ords-config:
-  ollama-models:
 
 services:
   db:
     hostname: db
-    image: ${ORACLE_DB_IMAGE:-container-registry.oracle.com/database/free:latest}
+    image: ${ORACLE_DB_IMAGE:-container-registry.oracle.com/database/free:23.26.1.0}
     environment:
       ORACLE_PWD: ${ORACLE_PWD:-oracle}
       ORACLE_CHARACTERSET: ${ORACLE_CHARACTERSET:-AL32UTF8}
@@ -30,13 +29,11 @@ services:
 
   ords:
     hostname: ords
-    image: ${ORDS_IMAGE:-container-registry.oracle.com/database/ords:latest}
+    image: ${ORDS_IMAGE:-container-registry.oracle.com/database/ords:26.2.3}
     environment:
       CONN_STRING: ${CONN_STRING:-db:1521/FREEPDB1}
       DBHOST: ${DBHOST:-db}
-      # Keep ORDS-to-Oracle traffic on the container network port. DBPORT is
-      # only the host-published port and may differ for parallel installations.
-      DBPORT: ${ORDS_DBPORT:-1521}
+      DBPORT: ${DBPORT:-1521}
       DBSERVICENAME: ${DBSERVICENAME:-FREEPDB1}
       ORACLE_PWD: ${ORACLE_PWD:-oracle}
       # Required by current ORDS images when they install their database user.
@@ -60,16 +57,16 @@ services:
 
   ollama:
     hostname: ollama
-    image: ${OLLAMA_IMAGE:-docker.io/ollama/ollama:latest}
+    # Before starting Compose, load the local image with: podman load -i /tmp/ollama.tar
+    image: localhost/ollama:local
+    pull_policy: never
+    entrypoint: ["/bin/ollama"]
+    command: ["serve"]
     environment:
       OLLAMA_HOST: ${OLLAMA_HOST:-0.0.0.0:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
-    entrypoint: ["/bin/bash", "/pull_ollama.sh"]
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-      - ./scripts/pull_ollama.sh:/pull_ollama.sh:ro,z
     healthcheck:
       test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama show \"$${OLLAMA_MODEL:-llama3.2}\" >/dev/null 2>&1"]
       interval: 10s
@@ -96,8 +93,6 @@ services:
       ORACLE_POOL_INCREMENT: ${ORACLE_POOL_INCREMENT:-1}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
-      RETURN_SYNTHESIS_ENABLED: ${RETURN_SYNTHESIS_ENABLED:-true}
-      RETURN_SYNTHESIS_TIMEOUT_MS: ${RETURN_SYNTHESIS_TIMEOUT_MS:-20000}
       DEMO_USAGE_COUNTER_ENABLED: ${DEMO_USAGE_COUNTER_ENABLED:-true}
       DEMO_USAGE_COUNTER_PAR_URL: ${DEMO_USAGE_COUNTER_PAR_URL:-}
       DEMO_USAGE_COUNTER_PREFIX: ${DEMO_USAGE_COUNTER_PREFIX:-retail-demo-usage/events}
@@ -106,11 +101,7 @@ services:
     ports:
       - "${APP_PORT:-8505}:3001"
     depends_on:
-      db:
-        condition: service_healthy
       ords:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     healthcheck:
       test:

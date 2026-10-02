@@ -233,7 +233,7 @@ function OrderDualityPanel({ orderId, onClose }) {
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
  <span className="text-[10px] px-2 py-0.5 rounded border font-mono" style={{ background: 'rgba(170,100,59,0.1)', borderColor: 'rgba(170,100,59,0.3)', color: 'var(--color-text)' }}>
-	 SELECT DATA FROM student_requests_dv
+	 SELECT DATA FROM orders_dv
  </span>
  <span className="text-[10px] text-[var(--color-text-dim)]">
  Source: <span className="text-[var(--color-text)] font-mono">{duality.source}</span>
@@ -596,7 +596,7 @@ SELECT JSON {
 	WHERE r.request_id = :id;
 
 -- Duality: same data as a single JSON document
-	SELECT DATA FROM student_requests_dv
+	SELECT DATA FROM orders_dv
 	WHERE JSON_VALUE(DATA, '$._id' RETURNING NUMBER) = :id;
 	-- Returns: {"_id":1, "status":"processing", "items":[...]}`} />
  </div>
